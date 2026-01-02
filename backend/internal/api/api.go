@@ -37,7 +37,7 @@ func New(cfg config.Config, deps Deps) *fiber.App {
 
 	// Baseline middleware.
 	app.Use(requestid.New())
-	
+
 	// Add request logging middleware BEFORE recover to catch all requests
 	app.Use(func(c *fiber.Ctx) error {
 		// Log all incoming requests for debugging (especially webhooks)
@@ -54,7 +54,7 @@ func New(cfg config.Config, deps Deps) *fiber.App {
 		}
 		return c.Next()
 	})
-	
+
 	app.Use(recover.New())
 
 	// Configure CORS from environment variables
@@ -92,11 +92,26 @@ func New(cfg config.Config, deps Deps) *fiber.App {
 	app.Use(logger.New())
 
 	// Routes.
+	// Root handler - also handle POST requests to catch misconfigured webhooks
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
 			"service": "grainlify-api",
 			"status":  "running",
 			"version": "1.0.0",
+		})
+	})
+	app.Post("/", func(c *fiber.Ctx) error {
+		// Log POST requests to root - this helps identify if webhook URL is misconfigured
+		slog.Warn("POST request received at root path - webhook URL might be misconfigured",
+			"user_agent", c.Get("User-Agent"),
+			"x_github_event", c.Get("X-GitHub-Event"),
+			"x_github_delivery", c.Get("X-GitHub-Delivery"),
+			"remote_ip", c.IP(),
+		)
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "webhook_url_misconfigured",
+			"message": "Webhook requests should be sent to /webhooks/github, not /",
+			"correct_url": "/webhooks/github",
 		})
 	})
 	app.Get("/health", handlers.Health())

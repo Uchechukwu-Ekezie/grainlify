@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Eye, FileText, GitPullRequest, GitMerge } from 'lucide-react';
 import { useTheme } from '../../../../shared/contexts/ThemeContext';
 import { StatsCard } from './StatsCard';
@@ -117,8 +117,8 @@ export function DashboardTab({ selectedProjects, onRefresh }: DashboardTabProps)
     };
   }, [selectedProjects]);
 
-  // Helper function to format time ago
-  const formatTimeAgo = (date: Date): string => {
+  // Helper function to format time ago (memoized to prevent unnecessary re-renders)
+  const formatTimeAgo = useCallback((date: Date): string => {
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
@@ -131,10 +131,10 @@ export function DashboardTab({ selectedProjects, onRefresh }: DashboardTabProps)
     if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
     if (diffDays < 30) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
     return `${diffMonths} month${diffMonths !== 1 ? 's' : ''} ago`;
-  };
+  }, []);
 
-  // Helper function to parse time ago for sorting
-  const parseTimeAgo = (timeAgo: string): number => {
+  // Helper function to parse time ago for sorting (memoized)
+  const parseTimeAgo = useCallback((timeAgo: string): number => {
     const now = new Date().getTime();
     if (timeAgo.includes('minute')) {
       const mins = parseInt(timeAgo) || 0;
@@ -153,7 +153,7 @@ export function DashboardTab({ selectedProjects, onRefresh }: DashboardTabProps)
       return now - months * 30 * 86400000;
     }
     return now;
-  };
+  }, []);
 
   // Calculate stats from real data
   const stats: StatCard[] = useMemo(() => {

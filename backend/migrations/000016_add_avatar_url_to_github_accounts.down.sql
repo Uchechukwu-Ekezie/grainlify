@@ -5,3 +5,6 @@ ALTER TABLE github_accounts
 -- Drop index
 DROP INDEX IF EXISTS idx_github_accounts_user_id;
 
+
+
+

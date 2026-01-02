@@ -21,16 +21,29 @@ type Config struct {
 
 	GitHubOAuthClientID     string
 	GitHubOAuthClientSecret string
-	GitHubOAuthRedirectURL  string
+	GitHubOAuthRedirectURL  string // Full callback URL (e.g., http://localhost:8080/auth/github/login/callback)
 	GitHubOAuthSuccessRedirectURL string
-	GitHubLoginRedirectURL string
+	GitHubLoginRedirectURL string // Alternative callback URL (deprecated, use GitHubOAuthRedirectURL)
 	GitHubLoginSuccessRedirectURL string
+
+	// GitHub App configuration (for organization installations)
+	GitHubAppID     string // GitHub App ID (numeric)
+	GitHubAppSlug   string // GitHub App slug (e.g., "grainlify")
+	GitHubAppPrivateKey string // GitHub App private key (PEM format, base64 encoded)
 
 	// Used to validate GitHub webhook signatures (X-Hub-Signature-256).
 	GitHubWebhookSecret string
 
 	// Public base URL of this backend, used when registering GitHub webhooks.
 	PublicBaseURL string
+
+	// Frontend base URL (e.g., http://localhost:5173 or https://yourdomain.com)
+	// Used for OAuth redirects and CORS configuration
+	FrontendBaseURL string
+
+	// Allowed CORS origins (comma-separated). If empty, uses FrontendBaseURL
+	// Example: "http://localhost:5173,https://grainlify.figma.site"
+	CORSOrigins string
 
 	// Used to encrypt stored OAuth access tokens at rest. Must be 32 bytes base64 (AES-256-GCM key).
 	TokenEncKeyB64 string
@@ -74,9 +87,16 @@ func Load() Config {
 		GitHubLoginRedirectURL: getEnv("GITHUB_LOGIN_REDIRECT_URL", ""),
 		GitHubLoginSuccessRedirectURL: getEnv("GITHUB_LOGIN_SUCCESS_REDIRECT_URL", ""),
 
+		GitHubAppID:       getEnv("GITHUB_APP_ID", ""),
+		GitHubAppSlug:     getEnv("GITHUB_APP_SLUG", ""),
+		GitHubAppPrivateKey: getEnv("GITHUB_APP_PRIVATE_KEY", ""),
+
 		GitHubWebhookSecret: getEnv("GITHUB_WEBHOOK_SECRET", ""),
 
 		PublicBaseURL: getEnv("PUBLIC_BASE_URL", ""),
+
+		FrontendBaseURL: getEnv("FRONTEND_BASE_URL", ""),
+		CORSOrigins:     getEnv("CORS_ORIGINS", ""),
 
 		TokenEncKeyB64: getEnv("TOKEN_ENC_KEY_B64", ""),
 

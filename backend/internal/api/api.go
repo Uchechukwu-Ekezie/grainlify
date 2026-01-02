@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log/slog"
 	"strings"
 	"time"
 
@@ -23,36 +24,53 @@ type Deps struct {
 }
 
 func New(cfg config.Config, deps Deps) *fiber.App {
+	slog.Info("initializing Fiber app",
+		"app_name", "grainlify-api",
+	)
 	app := fiber.New(fiber.Config{
-		AppName:      "patchwork-api",
+		AppName:      "grainlify-api",
 		IdleTimeout:  60 * time.Second,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	})
+	slog.Info("Fiber app created")
 
 	// Baseline middleware.
 	app.Use(requestid.New())
 	app.Use(recover.New())
-	app.Use(cors.New(cors.Config{
-		AllowOriginsFunc: func(origin string) bool {
-			// Allow localhost origins for development
+
+	// Configure CORS from environment variables
+	corsConfig := cors.Config{
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-Admin-Bootstrap-Token",
+		AllowMethods:     "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+		AllowCredentials: true,
+	}
+
+	// If CORS_ORIGINS is set, use it (comma-separated list)
+	if cfg.CORSOrigins != "" {
+		origins := strings.Split(cfg.CORSOrigins, ",")
+		for i := range origins {
+			origins[i] = strings.TrimSpace(origins[i])
+		}
+		corsConfig.AllowOrigins = strings.Join(origins, ",")
+	} else {
+		// Otherwise, use AllowOriginsFunc for dynamic checking
+		corsConfig.AllowOriginsFunc = func(origin string) bool {
+			// Always allow localhost origins for development
 			if strings.HasPrefix(origin, "http://localhost:") || strings.HasPrefix(origin, "http://127.0.0.1:") {
 				return true
 			}
-			// Allow specific Figma site
-			if origin == "https://grainlify.figma.site" {
-				return true
-			}
-			// Allow any *.figma.site subdomain
-			if strings.HasSuffix(origin, ".figma.site") && strings.HasPrefix(origin, "https://") {
-				return true
+			// If FrontendBaseURL is set, allow it
+			if cfg.FrontendBaseURL != "" {
+				if origin == cfg.FrontendBaseURL || strings.HasPrefix(origin, cfg.FrontendBaseURL+"/") {
+					return true
+				}
 			}
 			return false
-		},
-		AllowHeaders: "Origin, Content-Type, Accept, Authorization, X-Admin-Bootstrap-Token",
-		AllowMethods: "GET,POST,PUT,PATCH,DELETE,OPTIONS",
-		AllowCredentials: true,
-	}))
+		}
+	}
+
+	app.Use(cors.New(corsConfig))
 	app.Use(logger.New())
 
 	// Routes.
@@ -86,6 +104,11 @@ func New(cfg config.Config, deps Deps) *fiber.App {
 	authGroup.Post("/github/start", auth.RequireAuth(cfg.JWTSecret), ghOAuth.Start())
 	authGroup.Get("/github/callback", ghOAuth.CallbackUnified())
 	authGroup.Get("/github/status", auth.RequireAuth(cfg.JWTSecret), ghOAuth.Status())
+
+	// GitHub App installation endpoints
+	ghApp := handlers.NewGitHubAppHandler(cfg, deps.DB)
+	authGroup.Post("/github/app/install/start", auth.RequireAuth(cfg.JWTSecret), ghApp.StartInstallation())
+	app.Get("/auth/github/app/install/callback", ghApp.HandleInstallationCallback())
 
 	// KYC verification endpoints
 	kyc := handlers.NewKYCHandler(cfg, deps.DB)
@@ -133,6 +156,12 @@ func New(cfg config.Config, deps Deps) *fiber.App {
 	diditWebhook := handlers.NewDiditWebhookHandler(cfg, deps.DB)
 	app.Get("/webhooks/didit", diditWebhook.Receive())
 	app.Post("/webhooks/didit", diditWebhook.Receive())
+
+	slog.Info("all routes registered",
+		"total_routes", "~30",
+		"db_configured", deps.DB != nil,
+		"nats_configured", deps.Bus != nil,
+	)
 
 	return app
 }

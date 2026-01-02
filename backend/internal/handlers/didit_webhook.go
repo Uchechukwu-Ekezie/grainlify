@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -130,12 +131,14 @@ WHERE id = $3
 		if c.Method() == "GET" {
 			// Redirect to frontend with success message
 			successURL := h.cfg.GitHubOAuthSuccessRedirectURL
-			if successURL == "" {
-				successURL = "http://localhost:5173"
+			if successURL == "" && h.cfg.FrontendBaseURL != "" {
+				successURL = strings.TrimSuffix(h.cfg.FrontendBaseURL, "/")
 			}
-			// Add query params to indicate success
-			redirectURL := fmt.Sprintf("%s?kyc=verified&session_id=%s", successURL, sessionID)
-			return c.Redirect(redirectURL, fiber.StatusFound)
+			if successURL != "" {
+				// Add query params to indicate success
+				redirectURL := fmt.Sprintf("%s?kyc=verified&session_id=%s", successURL, sessionID)
+				return c.Redirect(redirectURL, fiber.StatusFound)
+			}
 		}
 
 		// For POST requests (webhook), return JSON

@@ -10,3 +10,6 @@ CREATE INDEX IF NOT EXISTS idx_projects_category ON projects(category) WHERE cat
 CREATE INDEX IF NOT EXISTS idx_projects_tags ON projects USING GIN(tags) WHERE tags IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status) WHERE status = 'verified';
 
+
+
+

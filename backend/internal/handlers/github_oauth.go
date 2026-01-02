@@ -224,8 +224,14 @@ UPDATE users SET github_user_id = $2, updated_at = now() WHERE id = $1
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "token_issue_failed"})
 			}
 
-			if h.cfg.GitHubLoginSuccessRedirectURL != "" {
-				ru, err := url.Parse(h.cfg.GitHubLoginSuccessRedirectURL)
+			// Determine redirect URL: use config if set, otherwise construct from FrontendBaseURL
+			redirectURL := h.cfg.GitHubLoginSuccessRedirectURL
+			if redirectURL == "" && h.cfg.FrontendBaseURL != "" {
+				redirectURL = strings.TrimSuffix(h.cfg.FrontendBaseURL, "/") + "/auth/callback"
+			}
+
+			if redirectURL != "" {
+				ru, err := url.Parse(redirectURL)
 				if err == nil {
 					q := ru.Query()
 					q.Set("token", jwtToken)
@@ -273,11 +279,22 @@ UPDATE users SET github_user_id = $2, updated_at = now() WHERE id = $1
 }
 
 func effectiveGitHubRedirect(cfg config.Config) string {
-	// Recommended: set these to the same value (a single callback URL).
+	// Recommended: set GITHUB_OAUTH_REDIRECT_URL to the full callback URL
+	// Example: http://localhost:8080/auth/github/login/callback
+	// This must match exactly what's registered in your GitHub OAuth app settings
 	if strings.TrimSpace(cfg.GitHubOAuthRedirectURL) != "" {
 		return strings.TrimSpace(cfg.GitHubOAuthRedirectURL)
 	}
-	return strings.TrimSpace(cfg.GitHubLoginRedirectURL)
+	// Fallback to GitHubLoginRedirectURL for backwards compatibility
+	if strings.TrimSpace(cfg.GitHubLoginRedirectURL) != "" {
+		return strings.TrimSpace(cfg.GitHubLoginRedirectURL)
+	}
+	// If neither is set and we have PublicBaseURL, construct it
+	if cfg.PublicBaseURL != "" {
+		baseURL := strings.TrimSuffix(cfg.PublicBaseURL, "/")
+		return baseURL + "/auth/github/login/callback"
+	}
+	return ""
 }
 
 func (h *GitHubOAuthHandler) Status() fiber.Handler {

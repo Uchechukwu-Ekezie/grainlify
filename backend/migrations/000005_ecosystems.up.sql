@@ -12,3 +12,6 @@ CREATE TABLE IF NOT EXISTS ecosystems (
 CREATE INDEX IF NOT EXISTS idx_ecosystems_status ON ecosystems(status);
 
 
+
+
+

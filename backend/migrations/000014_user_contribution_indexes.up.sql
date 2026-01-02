@@ -22,3 +22,6 @@ WHERE status = 'verified';
 CREATE INDEX IF NOT EXISTS idx_projects_language ON projects(language) 
 WHERE language IS NOT NULL AND status = 'verified';
 
+
+
+

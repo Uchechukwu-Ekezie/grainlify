@@ -5,3 +5,6 @@ ALTER TABLE github_accounts
 -- Add index for faster lookups
 CREATE INDEX IF NOT EXISTS idx_github_accounts_user_id ON github_accounts(user_id);
 
+
+
+

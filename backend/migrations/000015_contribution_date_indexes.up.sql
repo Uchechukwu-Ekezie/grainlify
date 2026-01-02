@@ -16,3 +16,6 @@ WHERE author_login IS NOT NULL AND created_at_github IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_github_prs_author_date ON github_pull_requests(author_login, created_at_github) 
 WHERE author_login IS NOT NULL AND created_at_github IS NOT NULL;
 
+
+
+

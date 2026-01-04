@@ -33,6 +33,11 @@ export function ProfileTab() {
   const [website, setWebsite] = useState('');
   const [bio, setBio] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [telegram, setTelegram] = useState('');
+  const [linkedin, setLinkedin] = useState('');
+  const [whatsapp, setWhatsapp] = useState('');
+  const [twitter, setTwitter] = useState('');
+  const [discord, setDiscord] = useState('');
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -144,6 +149,11 @@ export function ProfileTab() {
         location: location || undefined,
         website: website || undefined,
         bio: bio || undefined,
+        telegram: telegram || undefined,
+        linkedin: linkedin || undefined,
+        whatsapp: whatsapp || undefined,
+        twitter: twitter || undefined,
+        discord: discord || undefined,
       });
       // Refetch user data to get updated profile
       const user = await getCurrentUser();
@@ -434,6 +444,8 @@ export function ProfileTab() {
             <div className="relative">
               <input
                 type="text"
+                value={linkedin}
+                onChange={(e) => setLinkedin(e.target.value)}
                 placeholder="Enter your linkedin handle"
                 className={`w-full px-4 py-3 pr-10 rounded-[14px] backdrop-blur-[30px] border focus:outline-none focus:bg-white/[0.2] focus:border-[#c9983a]/30 transition-all text-[14px] ${
                   theme === 'dark'
@@ -455,6 +467,8 @@ export function ProfileTab() {
             <div className="relative">
               <input
                 type="text"
+                value={whatsapp}
+                onChange={(e) => setWhatsapp(e.target.value)}
                 placeholder="Enter your whatsApp handle"
                 className={`w-full px-4 py-3 pr-10 rounded-[14px] backdrop-blur-[30px] border focus:outline-none focus:bg-white/[0.2] focus:border-[#c9983a]/30 transition-all text-[14px] ${
                   theme === 'dark'
@@ -476,6 +490,8 @@ export function ProfileTab() {
             <div className="relative">
               <input
                 type="text"
+                value={twitter}
+                onChange={(e) => setTwitter(e.target.value)}
                 placeholder="Enter your twitter handle"
                 className={`w-full px-4 py-3 pr-10 rounded-[14px] backdrop-blur-[30px] border focus:outline-none focus:bg-white/[0.2] focus:border-[#c9983a]/30 transition-all text-[14px] ${
                   theme === 'dark'
@@ -497,6 +513,8 @@ export function ProfileTab() {
             <div className="relative">
               <input
                 type="text"
+                value={discord}
+                onChange={(e) => setDiscord(e.target.value)}
                 placeholder="Enter your discord handle"
                 className={`w-full px-4 py-3 pr-10 rounded-[14px] backdrop-blur-[30px] border focus:outline-none focus:bg-white/[0.2] focus:border-[#c9983a]/30 transition-all text-[14px] ${
                   theme === 'dark'

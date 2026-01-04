@@ -149,12 +149,12 @@ func (h *AuthHandler) Me() fiber.Handler {
 		}
 
 		// Get user profile fields from database
-		var firstName, lastName, location, website, bio, avatarURL *string
+		var firstName, lastName, location, website, bio, avatarURL, telegram, linkedin, whatsapp, twitter, discord *string
 		err = h.db.Pool.QueryRow(c.Context(), `
-SELECT first_name, last_name, location, website, bio, avatar_url
+SELECT first_name, last_name, location, website, bio, avatar_url, telegram, linkedin, whatsapp, twitter, discord
 FROM users
 WHERE id = $1
-`, userID).Scan(&firstName, &lastName, &location, &website, &bio, &avatarURL)
+`, userID).Scan(&firstName, &lastName, &location, &website, &bio, &avatarURL, &telegram, &linkedin, &whatsapp, &twitter, &discord)
 		if err != nil {
 			slog.Warn("failed to fetch user profile fields", "error", err, "user_id", userID)
 		}
@@ -271,12 +271,27 @@ WHERE user_id = $1
 			}
 		}
 
-		// Add user profile fields to response (for first_name, last_name)
+		// Add user profile fields to response (for first_name, last_name, social links)
 		if firstName != nil && *firstName != "" {
 			response["first_name"] = *firstName
 		}
 		if lastName != nil && *lastName != "" {
 			response["last_name"] = *lastName
+		}
+		if telegram != nil && *telegram != "" {
+			response["telegram"] = *telegram
+		}
+		if linkedin != nil && *linkedin != "" {
+			response["linkedin"] = *linkedin
+		}
+		if whatsapp != nil && *whatsapp != "" {
+			response["whatsapp"] = *whatsapp
+		}
+		if twitter != nil && *twitter != "" {
+			response["twitter"] = *twitter
+		}
+		if discord != nil && *discord != "" {
+			response["discord"] = *discord
 		}
 
 		return c.Status(fiber.StatusOK).JSON(response)

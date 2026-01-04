@@ -48,13 +48,13 @@ FROM github_accounts
 WHERE user_id = $1
 `, userID).Scan(&githubLogin)
 
-		// Get user profile fields (bio, website) from users table
-		var bio, website *string
+		// Get user profile fields (bio, website, social links) from users table
+		var bio, website, telegram, linkedin, whatsapp, twitter, discord *string
 		_ = h.db.Pool.QueryRow(c.Context(), `
-SELECT bio, website
+SELECT bio, website, telegram, linkedin, whatsapp, twitter, discord
 FROM users
 WHERE id = $1
-`, userID).Scan(&bio, &website)
+`, userID).Scan(&bio, &website, &telegram, &linkedin, &whatsapp, &twitter, &discord)
 		if err != nil {
 			// User doesn't have GitHub account linked
 			return c.Status(fiber.StatusOK).JSON(fiber.Map{
@@ -273,12 +273,27 @@ WHERE p.status = 'verified'
 			},
 		}
 
-		// Add bio and website if available
+		// Add bio, website, and social links if available
 		if bio != nil && *bio != "" {
 			response["bio"] = *bio
 		}
 		if website != nil && *website != "" {
 			response["website"] = *website
+		}
+		if telegram != nil && *telegram != "" {
+			response["telegram"] = *telegram
+		}
+		if linkedin != nil && *linkedin != "" {
+			response["linkedin"] = *linkedin
+		}
+		if whatsapp != nil && *whatsapp != "" {
+			response["whatsapp"] = *whatsapp
+		}
+		if twitter != nil && *twitter != "" {
+			response["twitter"] = *twitter
+		}
+		if discord != nil && *discord != "" {
+			response["discord"] = *discord
 		}
 
 		return c.Status(fiber.StatusOK).JSON(response)
@@ -563,7 +578,7 @@ func (h *UserProfileHandler) PublicProfile() fiber.Handler {
 
 		var githubLogin *string
 		var userID *uuid.UUID
-		var bio, website *string
+		var bio, website, telegram, linkedin, whatsapp, twitter, discord *string
 
 		// If user_id is provided, get GitHub login from it
 		if userIDParam != "" {
@@ -585,10 +600,10 @@ WHERE user_id = $1
 
 			// Get profile fields
 			_ = h.db.Pool.QueryRow(c.Context(), `
-SELECT bio, website
+SELECT bio, website, telegram, linkedin, whatsapp, twitter, discord
 FROM users
 WHERE id = $1
-`, parsedUserID).Scan(&bio, &website)
+`, parsedUserID).Scan(&bio, &website, &telegram, &linkedin, &whatsapp, &twitter, &discord)
 		} else {
 			// If login is provided, get user_id from it
 			loginParamLower := strings.ToLower(loginParam)
@@ -622,10 +637,10 @@ WHERE LOWER(ga.login) = $1
 
 			// Get profile fields
 			_ = h.db.Pool.QueryRow(c.Context(), `
-SELECT bio, website
+SELECT bio, website, telegram, linkedin, whatsapp, twitter, discord
 FROM users
 WHERE id = $1
-`, foundUserID).Scan(&bio, &website)
+`, foundUserID).Scan(&bio, &website, &telegram, &linkedin, &whatsapp, &twitter, &discord)
 		}
 
 		if githubLogin == nil || *githubLogin == "" {
@@ -809,7 +824,7 @@ WHERE owner_user_id = $1 AND status = 'verified' AND deleted_at IS NULL
 			}
 		}
 
-		// Get avatar URL
+		// Get avatar URL - try database first, then GitHub
 		var avatarURL *string
 		if userID != nil {
 			_ = h.db.Pool.QueryRow(c.Context(), `
@@ -818,6 +833,11 @@ FROM users u
 LEFT JOIN github_accounts ga ON u.id = ga.user_id
 WHERE u.id = $1
 `, *userID).Scan(&avatarURL)
+		}
+		// If no avatar in database, use GitHub avatar URL as fallback
+		if (avatarURL == nil || *avatarURL == "") && githubLogin != nil {
+			ghAvatarURL := fmt.Sprintf("https://github.com/%s.png?size=200", *githubLogin)
+			avatarURL = &ghAvatarURL
 		}
 
 		response := fiber.Map{
@@ -904,6 +924,11 @@ func (h *UserProfileHandler) UpdateProfile() fiber.Handler {
 			Location  *string `json:"location,omitempty"`
 			Website   *string `json:"website,omitempty"`
 			Bio       *string `json:"bio,omitempty"`
+			Telegram  *string `json:"telegram,omitempty"`
+			LinkedIn  *string `json:"linkedin,omitempty"`
+			WhatsApp  *string `json:"whatsapp,omitempty"`
+			Twitter   *string `json:"twitter,omitempty"`
+			Discord   *string `json:"discord,omitempty"`
 		}
 
 		if err := c.BodyParser(&req); err != nil {
@@ -938,6 +963,31 @@ func (h *UserProfileHandler) UpdateProfile() fiber.Handler {
 		if req.Bio != nil {
 			updates = append(updates, fmt.Sprintf("bio = $%d", argPos))
 			args = append(args, strings.TrimSpace(*req.Bio))
+			argPos++
+		}
+		if req.Telegram != nil {
+			updates = append(updates, fmt.Sprintf("telegram = $%d", argPos))
+			args = append(args, strings.TrimSpace(*req.Telegram))
+			argPos++
+		}
+		if req.LinkedIn != nil {
+			updates = append(updates, fmt.Sprintf("linkedin = $%d", argPos))
+			args = append(args, strings.TrimSpace(*req.LinkedIn))
+			argPos++
+		}
+		if req.WhatsApp != nil {
+			updates = append(updates, fmt.Sprintf("whatsapp = $%d", argPos))
+			args = append(args, strings.TrimSpace(*req.WhatsApp))
+			argPos++
+		}
+		if req.Twitter != nil {
+			updates = append(updates, fmt.Sprintf("twitter = $%d", argPos))
+			args = append(args, strings.TrimSpace(*req.Twitter))
+			argPos++
+		}
+		if req.Discord != nil {
+			updates = append(updates, fmt.Sprintf("discord = $%d", argPos))
+			args = append(args, strings.TrimSpace(*req.Discord))
 			argPos++
 		}
 

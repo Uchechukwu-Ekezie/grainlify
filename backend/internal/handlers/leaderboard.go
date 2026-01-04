@@ -23,13 +23,17 @@ func (h *LeaderboardHandler) Leaderboard() fiber.Handler {
 			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "db_not_configured"})
 		}
 
-		// Get limit from query params (default 10, max 100)
+		// Get limit and offset from query params (default 10, max 100)
 		limit := c.QueryInt("limit", 10)
 		if limit < 1 {
 			limit = 10
 		}
 		if limit > 100 {
 			limit = 100
+		}
+		offset := c.QueryInt("offset", 0)
+		if offset < 0 {
+			offset = 0
 		}
 
 		// Query top contributors by contribution count in verified projects
@@ -109,8 +113,8 @@ WHERE (
   WHERE LOWER(pr.author_login) = LOWER(ac.login) AND p.status = 'verified'
 ) > 0
 ORDER BY contribution_count DESC, ac.login ASC
-LIMIT $1
-`, limit)
+LIMIT $1 OFFSET $2
+`, limit, offset)
 		if err != nil {
 			slog.Error("failed to fetch leaderboard",
 				"error", err,
@@ -135,10 +139,13 @@ LIMIT $1
 				continue
 			}
 
-			// Default avatar if not set
+			// Default avatar if not set - use GitHub avatar URL as fallback
 			avatar := ""
 			if avatarURL != nil && *avatarURL != "" {
 				avatar = *avatarURL
+			} else {
+				// Fallback to GitHub avatar URL if not in database
+				avatar = fmt.Sprintf("https://github.com/%s.png?size=200", username)
 			}
 
 			// Ensure ecosystems is not nil

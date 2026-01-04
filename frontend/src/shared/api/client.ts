@@ -362,7 +362,7 @@ export const getEcosystems = () =>
   }>('/ecosystems');
 
 // Leaderboard
-export const getLeaderboard = (limit = 10) =>
+export const getLeaderboard = (limit = 10, offset = 0) =>
   apiRequest<Array<{
     rank: number;
     rank_tier: string;
@@ -375,7 +375,7 @@ export const getLeaderboard = (limit = 10) =>
     score: number;
     trend: 'up' | 'down' | 'same';
     trendValue: number;
-  }>>(`/leaderboard?limit=${limit}`);
+  }>>(`/leaderboard?limit=${limit}&offset=${offset}`);
 
 // KYC
 export const startKYCVerification = () =>

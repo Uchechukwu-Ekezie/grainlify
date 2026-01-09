@@ -5,6 +5,7 @@ interface EmptyIssueStateProps {
 }
 
 export function EmptyIssueState({ issueCount }: EmptyIssueStateProps) {
+  const displayCount = Number.isFinite(issueCount) ? issueCount : 0;
   return (
     <>
       {/* Background decorative circles */}
@@ -38,7 +39,7 @@ export function EmptyIssueState({ issueCount }: EmptyIssueStateProps) {
           {/* Subtle hint */}
           <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/20 border border-white/30">
             <div className="w-2 h-2 rounded-full bg-[#c9983a] animate-pulse" />
-            <span className="text-[13px] font-semibold text-[#7a6b5a]">{issueCount} issues available</span>
+            <span className="text-[13px] font-semibold text-[#7a6b5a]">{displayCount} issue{displayCount === 1 ? '' : 's'} available</span>
           </div>
         </div>
       </div>

@@ -205,6 +205,9 @@ func New(cfg config.Config, deps Deps) *fiber.App {
 	app.Get("/projects/:id/prs", auth.RequireAuth(cfg.JWTSecret), data.PRs())
 	app.Get("/projects/:id/events", auth.RequireAuth(cfg.JWTSecret), data.Events())
 
+	issueApps := handlers.NewIssueApplicationsHandler(cfg, deps.DB)
+	app.Post("/projects/:id/issues/:number/apply", auth.RequireAuth(cfg.JWTSecret), issueApps.Apply())
+
 	admin := handlers.NewAdminHandler(cfg, deps.DB)
 	adminGroup := app.Group("/admin", auth.RequireAuth(cfg.JWTSecret))
 	adminGroup.Post("/bootstrap", admin.BootstrapAdmin())

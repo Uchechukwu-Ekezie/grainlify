@@ -16,3 +16,6 @@ CREATE INDEX IF NOT EXISTS idx_github_issues_labels ON github_issues USING GIN (
 
 
 
+
+
+

@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import { X, ExternalLink, User, ChevronDown, Plus, Award, Users, Star, CheckCircle, MessageSquare, Filter, Search, Loader2 } from 'lucide-react';
 import { useTheme } from '../../../../shared/contexts/ThemeContext';
+import { useAuth } from '../../../../shared/contexts/AuthContext';
 import { Issue } from '../../types';
 import { EmptyIssueState } from './EmptyIssueState';
 import { IssueCard } from '../../../../shared/components/ui/IssueCard';
-import { getProjectIssues } from '../../../../shared/api/client';
+import { applyToIssue, getProjectIssues } from '../../../../shared/api/client';
 import { formatDistanceToNow } from 'date-fns';
 import { IssueCardSkeleton } from '../../../../shared/components/IssueCardSkeleton';
 
@@ -50,6 +51,7 @@ interface IssueFromAPI {
 
 export function IssuesTab({ onNavigate, selectedProjects, onRefresh, initialSelectedIssueId, initialSelectedProjectId }: IssuesTabProps) {
   const { theme } = useTheme();
+  const { userRole, user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
   const [selectedIssueFromAPI, setSelectedIssueFromAPI] = useState<IssueFromAPI | null>(null);
@@ -70,8 +72,58 @@ export function IssuesTab({ onNavigate, selectedProjects, onRefresh, initialSele
   const [labelSearch, setLabelSearch] = useState('');
   const [repoSearch, setRepoSearch] = useState('');
   const [expandedApplications, setExpandedApplications] = useState<Record<string, boolean>>({});
+  const [applicationDraft, setApplicationDraft] = useState('');
+  const [isSubmittingApplication, setIsSubmittingApplication] = useState(false);
+  const [applicationError, setApplicationError] = useState<string | null>(null);
   const [issues, setIssues] = useState<Array<IssueFromAPI & { projectName: string; projectId: string }>>([]);
   const [isLoadingIssues, setIsLoadingIssues] = useState(true);
+  const filterBtnRef = useRef<HTMLButtonElement | null>(null);
+  const filterPopoverRef = useRef<HTMLDivElement | null>(null);
+  const [filterPopoverPos, setFilterPopoverPos] = useState<{ top: number; left: number }>({ top: 140, left: 350 });
+
+  const computeFilterPopoverPos = useCallback(() => {
+    const el = filterBtnRef.current;
+    if (!el) return { top: 140, left: 350 };
+
+    const r = el.getBoundingClientRect();
+    const width = 350;
+    const gap = 10;
+    const padding = 12;
+
+    // Desired: same row as the filter icon, positioned to the RIGHT of it.
+    let top = r.top;
+    let left = r.right + gap;
+
+    // Clamp vertically so it stays on screen.
+    top = Math.max(padding, Math.min(window.innerHeight - padding, top));
+
+    // If it overflows to the right, flip to left side of the icon.
+    if (left + width + padding > window.innerWidth) {
+      left = r.left - width - gap;
+    }
+
+    // Final clamp horizontally.
+    left = Math.max(padding, Math.min(window.innerWidth - width - padding, left));
+
+    return { top, left };
+  }, []);
+
+  useEffect(() => {
+    if (!isFilterModalOpen) return;
+    const update = () => setFilterPopoverPos(computeFilterPopoverPos());
+    update();
+    window.addEventListener('resize', update);
+    // Keep popover aligned when page scrolls (fixed positioning uses viewport coordinates).
+    window.addEventListener('scroll', update, { passive: true });
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update as any);
+    };
+  }, [isFilterModalOpen, computeFilterPopoverPos]);
+
+  // Popover behavior:
+  // - allow background scrolling/clicking (no overlay)
+  // - do NOT auto-close on outside click (close only via filter icon, X, or Apply)
 
   // Helper function to format time ago (memoized)
   const formatTimeAgo = useCallback((dateString: string | null): string => {
@@ -184,18 +236,18 @@ export function IssuesTab({ onNavigate, selectedProjects, onRefresh, initialSele
     // Get all comments from the API
     const comments = issueFromAPI.comments || [];
     const issueAuthor = issueFromAPI.author_login;
+    const appPrefix = '[grainlify application]';
     
-    // Applications are comments from users other than the issue author
-    // (or all comments if we want to show all as potential applications)
+    // Applications are explicit Grainlify application comments (so discussions can contain other chatter).
     const applications = comments
-      .filter(comment => comment.user.login !== issueAuthor)
-      .map((comment, index) => ({
+      .filter(comment => (comment.body || '').toLowerCase().startsWith(appPrefix))
+      .map((comment) => ({
         id: comment.id.toString(),
         author: {
           name: comment.user.login,
           avatar: getGitHubAvatar(comment.user.login, 48),
         },
-        message: comment.body,
+        message: (comment.body || '').replace(new RegExp(`^${appPrefix}\\s*`, 'i'), '').trim(),
         timeAgo: formatTimeAgo(comment.created_at),
         isAssigned: issue.applicationStatus === 'assigned',
         // These would need to come from user profile API in the future
@@ -212,7 +264,7 @@ export function IssuesTab({ onNavigate, selectedProjects, onRefresh, initialSele
       timeAgo: formatTimeAgo(comment.created_at),
       content: comment.body,
       isAuthor: comment.user.login === issueAuthor,
-      appliedForContribution: comment.user.login !== issueAuthor,
+      appliedForContribution: (comment.body || '').toLowerCase().startsWith(appPrefix),
     }));
     
     return {
@@ -232,6 +284,71 @@ export function IssuesTab({ onNavigate, selectedProjects, onRefresh, initialSele
     selectedFilters.categories.length +
     selectedFilters.languages.length +
     selectedFilters.labels.length;
+
+  const visibleIssues = useMemo(() => {
+    return issues.filter((issue) => {
+      // Search filter
+      const matchesSearch =
+        searchQuery === '' ||
+        issue.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        issue.author_login.toLowerCase().includes(searchQuery.toLowerCase());
+
+      // Status filter
+      const status = selectedFilters.status[0] || 'open';
+      const matchesStatus = issue.state === status;
+
+      // Applicants filter
+      const applicants = selectedFilters.applicants[0]; // 'yes' | 'no' | undefined
+      const applicantCount = issue.comments_count || 0;
+      const matchesApplicants = !applicants || (applicants === 'yes' ? applicantCount > 0 : applicantCount === 0);
+
+      // Assignee filter (based on assignees array)
+      const assignee = selectedFilters.assignee[0]; // 'yes' | 'no' | undefined
+      const assigneesCount = Array.isArray(issue.assignees) ? issue.assignees.length : 0;
+      const matchesAssignee = !assignee || (assignee === 'yes' ? assigneesCount > 0 : assigneesCount === 0);
+
+      // Stale filter (issues older than 30 days)
+      const stale = selectedFilters.stale[0]; // 'yes' | 'no' | undefined
+      const updatedAt = issue.updated_at ? new Date(issue.updated_at) : new Date(issue.last_seen_at);
+      const daysSinceUpdate = (Date.now() - updatedAt.getTime()) / (1000 * 60 * 60 * 24);
+      const isStale = daysSinceUpdate >= 30;
+      const matchesStale = !stale || (stale === 'yes' ? isStale : !isStale);
+
+      // Repository filter
+      const matchesRepository = !selectedFilters.repositoryId || issue.projectId === selectedFilters.repositoryId;
+
+      // Categories filter (check labels)
+      const matchesCategories =
+        selectedFilters.categories.length === 0 ||
+        selectedFilters.categories.some((category) => {
+          const issueTags = issue.labels?.map((l: any) => (l.name || l).toLowerCase()) || [];
+          return issueTags.includes(category.toLowerCase());
+        });
+
+      // Languages filter (not available in current API response, skip for now)
+      const matchesLanguages = selectedFilters.languages.length === 0;
+
+      // Labels filter
+      const matchesLabels =
+        selectedFilters.labels.length === 0 ||
+        selectedFilters.labels.some((label) => {
+          const issueTags = issue.labels?.map((l: any) => (l.name || l).toLowerCase()) || [];
+          return issueTags.includes(label.toLowerCase());
+        });
+
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesApplicants &&
+        matchesAssignee &&
+        matchesStale &&
+        matchesRepository &&
+        matchesCategories &&
+        matchesLanguages &&
+        matchesLabels
+      );
+    });
+  }, [issues, searchQuery, selectedFilters]);
 
   // If we were opened from a deep-link (e.g. project detail click), auto-select the target issue.
   useEffect(() => {
@@ -307,7 +424,8 @@ export function IssuesTab({ onNavigate, selectedProjects, onRefresh, initialSele
 
           {/* Filter Button with Badge */}
           <button 
-            onClick={() => setIsFilterModalOpen(true)}
+            ref={filterBtnRef}
+            onClick={() => setIsFilterModalOpen((v) => !v)}
             className={`relative p-3 rounded-[16px] backdrop-blur-[40px] border hover:bg-white/[0.15] transition-all ${
             isDark
               ? 'bg-white/[0.12] border-white/20'
@@ -317,7 +435,7 @@ export function IssuesTab({ onNavigate, selectedProjects, onRefresh, initialSele
               {appliedFilterCount}
             </div>
             <Filter className={`w-4 h-4 transition-colors ${
-              isDark ? 'text-[#2d2820]' : 'text-[#2d2820]'
+              isDark ? 'text-[#f5f5f5]' : 'text-[#2d2820]'
             }`} />
           </button>
         </div>
@@ -341,66 +459,16 @@ export function IssuesTab({ onNavigate, selectedProjects, onRefresh, initialSele
                   : 'No issues in selected repositories'}
               </p>
             </div>
+          ) : visibleIssues.length === 0 ? (
+            <div className={`px-6 py-8 text-center ${
+              isDark ? 'text-[#b8a898]' : 'text-[#7a6b5a]'
+            }`}>
+              <p className="text-[14px] font-medium mb-1">No issues match the filters</p>
+              <p className="text-[12px]">Try changing filters or clearing them.</p>
+            </div>
           ) : (
             <>
-              {issues
-                .filter(issue => {
-                  // Search filter
-                  const matchesSearch = searchQuery === '' || 
-                    issue.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                    issue.author_login.toLowerCase().includes(searchQuery.toLowerCase());
-                  
-                  // Status filter
-                  const status = selectedFilters.status[0] || 'open';
-                  const matchesStatus = issue.state === status;
-                  
-                  // Applicants filter
-                  const applicants = selectedFilters.applicants[0]; // 'yes' | 'no' | undefined
-                  const applicantCount = issue.comments_count || 0;
-                  const matchesApplicants =
-                    !applicants ||
-                    (applicants === 'yes' ? applicantCount > 0 : applicantCount === 0);
-                  
-                  // Assignee filter (based on assignees array)
-                  const assignee = selectedFilters.assignee[0]; // 'yes' | 'no' | undefined
-                  const assigneesCount = Array.isArray(issue.assignees) ? issue.assignees.length : 0;
-                  const matchesAssignee =
-                    !assignee ||
-                    (assignee === 'yes' ? assigneesCount > 0 : assigneesCount === 0);
-                  
-                  // Stale filter (issues older than 30 days)
-                  const stale = selectedFilters.stale[0]; // 'yes' | 'no' | undefined
-                  const updatedAt = issue.updated_at ? new Date(issue.updated_at) : new Date(issue.last_seen_at);
-                  const daysSinceUpdate = (Date.now() - updatedAt.getTime()) / (1000 * 60 * 60 * 24);
-                  const isStale = daysSinceUpdate >= 30;
-                  const matchesStale =
-                    !stale ||
-                    (stale === 'yes' ? isStale : !isStale);
-
-                  // Repository filter
-                  const matchesRepository = !selectedFilters.repositoryId || issue.projectId === selectedFilters.repositoryId;
-                  
-                  // Categories filter (check tags)
-                  const matchesCategories = selectedFilters.categories.length === 0 || 
-                    selectedFilters.categories.some(category => {
-                      const issueTags = issue.labels?.map((l: any) => (l.name || l).toLowerCase()) || [];
-                      return issueTags.includes(category.toLowerCase());
-                    });
-                  
-                  // Languages filter (not available in current API response, skip for now)
-                  const matchesLanguages = selectedFilters.languages.length === 0;
-                  
-                  // Labels filter
-                  const matchesLabels = selectedFilters.labels.length === 0 || 
-                    selectedFilters.labels.some(label => {
-                      const issueTags = issue.labels?.map((l: any) => (l.name || l).toLowerCase()) || [];
-                      return issueTags.includes(label.toLowerCase());
-                    });
-                  
-                  return matchesSearch && matchesStatus && matchesApplicants && matchesAssignee && 
-                         matchesStale && matchesRepository && matchesCategories && matchesLanguages && matchesLabels;
-                })
-                .map((issue) => {
+              {visibleIssues.map((issue) => {
                   // Convert API issue to Issue type for compatibility
                   // Backend now always provides updated_at_github, so we use updated_at
                   const timeAgoFormatted = formatTimeAgo(issue.updated_at);
@@ -450,7 +518,7 @@ export function IssuesTab({ onNavigate, selectedProjects, onRefresh, initialSele
               <div className={`text-center py-2 text-[12px] font-semibold transition-colors ${
                 isDark ? 'text-[#d4d4d4]' : 'text-[#7a6b5a]'
               }`}>
-                {issues.length} issue{issues.length !== 1 ? 's' : ''}
+                {visibleIssues.length} issue{visibleIssues.length !== 1 ? 's' : ''}
               </div>
             </>
           )}
@@ -464,7 +532,7 @@ export function IssuesTab({ onNavigate, selectedProjects, onRefresh, initialSele
           : 'bg-white/[0.12] border-white/20'
       }`}>
         {!selectedIssue ? (
-          <EmptyIssueState issueCount={issues.length} />
+          <EmptyIssueState issueCount={visibleIssues.length} />
         ) : (
           <div className="p-8">
             {/* Header */}
@@ -574,6 +642,142 @@ export function IssuesTab({ onNavigate, selectedProjects, onRefresh, initialSele
             {/* Content */}
             {issueDetailTab === 'applications' && (
               <>
+                {/* Apply Composer (contributors only, open + unassigned issues only) */}
+                {selectedIssueFromAPI && userRole === 'contributor' && (
+                  (() => {
+                    const isOpen = (selectedIssueFromAPI.state || '').toLowerCase() === 'open';
+                    const assigneesCount = Array.isArray(selectedIssueFromAPI.assignees) ? selectedIssueFromAPI.assignees.length : 0;
+                    const unassigned = assigneesCount === 0;
+                    const notAuthor = !user?.github?.login || user.github.login.toLowerCase() !== (selectedIssueFromAPI.author_login || '').toLowerCase();
+                    const canApply = isOpen && unassigned && notAuthor;
+
+                    return (
+                      <div className={`mb-6 rounded-[16px] border p-5 transition-colors ${
+                        isDark ? 'bg-white/[0.08] border-white/10' : 'bg-white/[0.15] border-white/25'
+                      }`}>
+                        <div className={`text-[14px] font-bold mb-2 ${isDark ? 'text-[#e8dfd0]' : 'text-[#2d2820]'}`}>
+                          Apply for this issue
+                        </div>
+                        {!isOpen ? (
+                          <div className={`text-[13px] ${isDark ? 'text-[#b8a898]' : 'text-[#7a6b5a]'}`}>
+                            This issue is closed. Applications are disabled.
+                          </div>
+                        ) : !unassigned ? (
+                          <div className={`text-[13px] ${isDark ? 'text-[#b8a898]' : 'text-[#7a6b5a]'}`}>
+                            This issue is already assigned. Applications are disabled.
+                          </div>
+                        ) : !notAuthor ? (
+                          <div className={`text-[13px] ${isDark ? 'text-[#b8a898]' : 'text-[#7a6b5a]'}`}>
+                            You can’t apply to your own issue.
+                          </div>
+                        ) : (
+                          <>
+                            <textarea
+                              value={applicationDraft}
+                              onChange={(e) => setApplicationDraft(e.target.value)}
+                              placeholder="Write your application message…"
+                              className={`w-full min-h-[110px] rounded-[12px] border px-4 py-3 text-[13px] outline-none transition-colors ${
+                                isDark
+                                  ? 'bg-white/[0.06] border-white/15 text-[#e8dfd0] placeholder:text-[#b8a898]/60'
+                                  : 'bg-white/[0.25] border-white/30 text-[#2d2820] placeholder:text-[#7a6b5a]/70'
+                              }`}
+                            />
+                            {applicationError && (
+                              <div className="mt-2 text-[12px] font-semibold text-red-400">
+                                {applicationError}
+                              </div>
+                            )}
+                            <div className="mt-3 flex items-center justify-end">
+                              <button
+                                disabled={isSubmittingApplication || applicationDraft.trim().length === 0}
+                                onClick={async () => {
+                                  try {
+                                    setApplicationError(null);
+                                    setIsSubmittingApplication(true);
+                                    const res = await applyToIssue(
+                                      selectedIssueFromAPI.projectId,
+                                      selectedIssueFromAPI.number,
+                                      applicationDraft.trim()
+                                    );
+                                    const newComment = res.comment;
+
+                                    // Update selected issue API payload (so Applications/Discussions refresh immediately)
+                                    setSelectedIssueFromAPI((prev) => {
+                                      if (!prev) return prev;
+                                      return {
+                                        ...prev,
+                                        comments_count: (prev.comments_count || 0) + 1,
+                                        comments: [
+                                          ...(prev.comments || []),
+                                          {
+                                            id: newComment.id,
+                                            body: newComment.body,
+                                            user: { login: newComment.user.login },
+                                            created_at: newComment.created_at,
+                                            updated_at: newComment.updated_at,
+                                          } as CommentFromAPI,
+                                        ],
+                                      };
+                                    });
+
+                                    // Update the list data too (left list applicants count)
+                                    setIssues((prev) =>
+                                      prev.map((it) =>
+                                        it.github_issue_id === selectedIssueFromAPI.github_issue_id && it.projectId === selectedIssueFromAPI.projectId
+                                          ? {
+                                              ...it,
+                                              comments_count: (it.comments_count || 0) + 1,
+                                              comments: [
+                                                ...(it.comments || []),
+                                                {
+                                                  id: newComment.id,
+                                                  body: newComment.body,
+                                                  user: { login: newComment.user.login },
+                                                  created_at: newComment.created_at,
+                                                  updated_at: newComment.updated_at,
+                                                } as any,
+                                              ],
+                                            }
+                                          : it
+                                      )
+                                    );
+
+                                    setSelectedIssue((prev) => {
+                                      if (!prev) return prev;
+                                      return {
+                                        ...prev,
+                                        applicants: (prev.applicants || 0) + 1,
+                                        comments: (prev.comments || 0) + 1,
+                                      };
+                                    });
+
+                                    setApplicationDraft('');
+                                  } catch (e: any) {
+                                    setApplicationError(e?.message || 'Failed to submit application');
+                                  } finally {
+                                    setIsSubmittingApplication(false);
+                                  }
+                                }}
+                                className={`px-5 py-2 rounded-[10px] text-[12px] font-semibold transition-all border ${
+                                  isSubmittingApplication
+                                    ? 'opacity-70 cursor-not-allowed'
+                                    : 'hover:scale-[1.02]'
+                                } ${
+                                  isDark
+                                    ? 'bg-gradient-to-br from-[#c9983a] to-[#a67c2e] border-white/10 text-white'
+                                    : 'bg-gradient-to-br from-[#c9983a] to-[#a67c2e] border-white/10 text-white'
+                                }`}
+                              >
+                                {isSubmittingApplication ? 'Submitting…' : 'Submit application'}
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })()
+                )}
+
                 {(!applicationData || applicationData.applications.length === 0) && (
                   <div className="text-center py-16">
                     <div className="relative mx-auto mb-6 w-20 h-20">
@@ -787,6 +991,23 @@ export function IssuesTab({ onNavigate, selectedProjects, onRefresh, initialSele
 
             {issueDetailTab === 'discussions' && (
               <div className="space-y-4">
+                {/* Issue description */}
+                {selectedIssueFromAPI?.description && (
+                  <div className={`backdrop-blur-[25px] rounded-[16px] border p-5 transition-colors ${
+                    isDark
+                      ? 'bg-white/[0.08] border-white/10'
+                      : 'bg-white/[0.15] border-white/25'
+                  }`}>
+                    <div className={`text-[12px] font-bold mb-2 ${isDark ? 'text-[#b8a898]' : 'text-[#7a6b5a]'}`}>
+                      Description
+                    </div>
+                    <div className={`text-[14px] leading-relaxed whitespace-pre-wrap transition-colors ${
+                      isDark ? 'text-[#e8dfd0]' : 'text-[#2d2820]'
+                    }`}>
+                      {selectedIssueFromAPI.description}
+                    </div>
+                  </div>
+                )}
                 {applicationData && applicationData.discussions.length > 0 ? (
                   applicationData.discussions.map((discussion) => (
                     <div
@@ -868,16 +1089,13 @@ export function IssuesTab({ onNavigate, selectedProjects, onRefresh, initialSele
       {isFilterModalOpen && (
         <>
           <div 
-            className="fixed inset-0 z-40"
-            onClick={() => setIsFilterModalOpen(false)}
-          />
-          
-          <div 
-            className={`fixed top-[140px] right-[350px] z-50 w-[350px] max-h-[calc(100vh-160px)] flex flex-col rounded-[20px] border-2 transition-colors ${
+            ref={filterPopoverRef}
+            className={`fixed z-50 w-[350px] max-h-[calc(100vh-160px)] flex flex-col rounded-[20px] border-2 transition-colors ${
               isDark
                 ? 'bg-[#3a3228] border-white/30'
                 : 'bg-[#d4c5b0] border-white/40'
             }`}
+            style={{ top: filterPopoverPos.top, left: filterPopoverPos.left }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-6 pb-4 flex-shrink-0 border-b border-white/10">
@@ -905,7 +1123,7 @@ export function IssuesTab({ onNavigate, selectedProjects, onRefresh, initialSele
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 scrollbar-custom space-y-4">
+            <div className="flex-1 overflow-y-auto p-6 scrollbar-hide space-y-4">
               {/* Repository */}
               <div>
                 <h3 className={`text-[12px] font-semibold mb-2 transition-colors ${

@@ -581,3 +581,19 @@ export const getProjectPRs = (projectId: string) =>
       last_seen_at: string;
     }>;
   }>(`/projects/${projectId}/prs`, { requiresAuth: true });
+
+export const applyToIssue = (projectId: string, issueNumber: number, message: string) =>
+  apiRequest<{
+    ok: boolean;
+    comment: {
+      id: number;
+      body: string;
+      user: { login: string };
+      created_at: string;
+      updated_at: string;
+    };
+  }>(`/projects/${projectId}/issues/${issueNumber}/apply`, {
+    requiresAuth: true,
+    method: 'POST',
+    body: JSON.stringify({ message }),
+  });

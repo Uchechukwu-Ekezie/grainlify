@@ -434,11 +434,20 @@ export function ProfilePage({
     };
   };
 
-  // Group contribution activity by month, filtering to only show open issues
+  // Group contribution activity by month, filtering to only show open issues and ALL PRs
   const contributionsByMonth: { [key: string]: any[] } = {};
   contributionActivity.forEach((activity) => {
-    // Only include issues if they are open, or include all PRs
-    if (activity.type === "issue" && activity.state !== "open") {
+    // Determine type - sometimes backend might label PRs as issues or generic
+    let type = activity.type;
+    // If it has merged or draft status, it must be a PR
+    if (activity.merged !== undefined || activity.draft !== undefined) {
+      type = "pull_request";
+    }
+
+    // Filter logic:
+    // 1. If it's an ISSUE, only show if OPEN
+    // 2. If it's a PR, show ALL (open, closed, merged)
+    if (type === "issue" && activity.state !== "open") {
       return; // Skip closed issues
     }
 
@@ -448,9 +457,9 @@ export function ProfilePage({
     }
     contributionsByMonth[month].push({
       id: activity.id,
-      type: activity.type,
+      type: type, // Use our resolved type
       number: activity.number,
-      badgeColor: activity.type === "issue" ? "#c9983a" : "#d4af37",
+      badgeColor: type === "issue" ? "#c9983a" : "#d4af37",
       title: activity.title,
       project: activity.project_name,
       project_id: activity.project_id,
@@ -477,11 +486,10 @@ export function ProfilePage({
 
   return (
     <div
-      className={`min-h-screen transition-colors ${
-        theme === "dark"
-          ? "bg-gradient-to-br from-[#1a1512] via-[#2a221a] to-[#1f1812]"
-          : "bg-gradient-to-br from-white/[0.95] via-[#faf8f3] to-white/[0.9]"
-      }`}
+      className={`min-h-screen transition-colors ${theme === "dark"
+        ? "bg-gradient-to-br from-[#1a1512] via-[#2a221a] to-[#1f1812]"
+        : "bg-gradient-to-br from-white/[0.95] via-[#faf8f3] to-white/[0.9]"
+        }`}
     >
       {/* Profile content */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
@@ -489,11 +497,10 @@ export function ProfilePage({
         {onBack && (viewingUserId || viewingUserLogin) && (
           <button
             onClick={onBack}
-            className={`flex items-center gap-2 px-4 py-2 rounded-[12px] backdrop-blur-[30px] border font-medium text-[14px] hover:bg-white/[0.2] transition-all ${
-              theme === "dark"
-                ? "bg-[#3d342c]/[0.4] border-white/15 text-[#d4c5b0]"
-                : "bg-white/[0.15] border-white/25 text-[#2d2820]"
-            }`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-[12px] backdrop-blur-[30px] border font-medium text-[14px] hover:bg-white/[0.2] transition-all ${theme === "dark"
+              ? "bg-[#3d342c]/[0.4] border-white/15 text-[#d4c5b0]"
+              : "bg-white/[0.15] border-white/25 text-[#2d2820]"
+              }`}
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Leaderboard
@@ -570,11 +577,10 @@ export function ProfilePage({
                   />
                 ) : (
                   <h1
-                    className={`text-[42px] font-black mb-4 tracking-tight transition-colors ${
-                      theme === "dark"
-                        ? "text-[#f5f5f5]"
-                        : "bg-gradient-to-r from-[#1a1410] via-[#2d2820] to-[#4a3f2f] bg-clip-text text-transparent drop-shadow-[0_2px_4px_rgba(0,0,0,0.1)]"
-                    }`}
+                    className={`text-[42px] font-black mb-4 tracking-tight transition-colors ${theme === "dark"
+                      ? "text-[#f5f5f5]"
+                      : "bg-gradient-to-r from-[#1a1410] via-[#2d2820] to-[#4a3f2f] bg-clip-text text-transparent drop-shadow-[0_2px_4px_rgba(0,0,0,0.1)]"
+                      }`}
                   >
                     {viewingUser?.login || user?.github?.login || "Developer"}
                   </h1>
@@ -586,11 +592,10 @@ export function ProfilePage({
                     <div className="mb-4 space-y-3">
                       {profileData.bio && (
                         <p
-                          className={`text-[15px] leading-relaxed transition-colors ${
-                            theme === "dark"
-                              ? "text-[#d4d4d4]"
-                              : "text-[#7a6b5a]"
-                          }`}
+                          className={`text-[15px] leading-relaxed transition-colors ${theme === "dark"
+                            ? "text-[#d4d4d4]"
+                            : "text-[#7a6b5a]"
+                            }`}
                         >
                           {profileData.bio}
                         </p>
@@ -606,11 +611,10 @@ export function ProfilePage({
                             }
                             target="_blank"
                             rel="noopener noreferrer"
-                            className={`text-[14px] font-medium hover:text-[#c9983a] transition-colors underline decoration-[#c9983a]/30 hover:decoration-[#c9983a]/60 ${
-                              theme === "dark"
-                                ? "text-[#d4c5b0]"
-                                : "text-[#7a6b5a]"
-                            }`}
+                            className={`text-[14px] font-medium hover:text-[#c9983a] transition-colors underline decoration-[#c9983a]/30 hover:decoration-[#c9983a]/60 ${theme === "dark"
+                              ? "text-[#d4c5b0]"
+                              : "text-[#7a6b5a]"
+                              }`}
                           >
                             {profileData.website
                               .replace(/^https?:\/\//, "")
@@ -644,11 +648,10 @@ export function ProfilePage({
                       </a>
                     ) : (
                       <div
-                        className={`w-8 h-8 rounded-full border-2 flex items-center justify-center cursor-not-allowed ${
-                          theme === "dark"
-                            ? "bg-gradient-to-br from-gray-400/20 to-gray-500/10 border-gray-400/30 opacity-40"
-                            : "bg-gradient-to-br from-gray-300/40 to-gray-400/30 border-gray-400/50 opacity-60"
-                        }`}
+                        className={`w-8 h-8 rounded-full border-2 flex items-center justify-center cursor-not-allowed ${theme === "dark"
+                          ? "bg-gradient-to-br from-gray-400/20 to-gray-500/10 border-gray-400/30 opacity-40"
+                          : "bg-gradient-to-br from-gray-300/40 to-gray-400/30 border-gray-400/50 opacity-60"
+                          }`}
                         title="Telegram"
                       >
                         <svg
@@ -685,11 +688,10 @@ export function ProfilePage({
                       </a>
                     ) : (
                       <div
-                        className={`w-8 h-8 mb-1 rounded-full border-2 flex items-center justify-center cursor-not-allowed ${
-                          theme === "dark"
-                            ? "bg-gradient-to-br from-gray-400/20 to-gray-500/10 border-gray-400/30 opacity-40"
-                            : "bg-gradient-to-br from-gray-300/40 to-gray-400/30 border-gray-400/50 opacity-60"
-                        }`}
+                        className={`w-8 h-8 mb-1 rounded-full border-2 flex items-center justify-center cursor-not-allowed ${theme === "dark"
+                          ? "bg-gradient-to-br from-gray-400/20 to-gray-500/10 border-gray-400/30 opacity-40"
+                          : "bg-gradient-to-br from-gray-300/40 to-gray-400/30 border-gray-400/50 opacity-60"
+                          }`}
                         title="LinkedIn"
                       >
                         <svg
@@ -722,11 +724,10 @@ export function ProfilePage({
                       </a>
                     ) : (
                       <div
-                        className={`w-8 h-8 rounded-full border-2 flex items-center justify-center cursor-not-allowed ${
-                          theme === "dark"
-                            ? "bg-gradient-to-br from-gray-400/20 to-gray-500/10 border-gray-400/30 opacity-40"
-                            : "bg-gradient-to-br from-gray-300/40 to-gray-400/30 border-gray-400/50 opacity-60"
-                        }`}
+                        className={`w-8 h-8 rounded-full border-2 flex items-center justify-center cursor-not-allowed ${theme === "dark"
+                          ? "bg-gradient-to-br from-gray-400/20 to-gray-500/10 border-gray-400/30 opacity-40"
+                          : "bg-gradient-to-br from-gray-300/40 to-gray-400/30 border-gray-400/50 opacity-60"
+                          }`}
                         title="WhatsApp"
                       >
                         <svg
@@ -759,11 +760,10 @@ export function ProfilePage({
                       </a>
                     ) : (
                       <div
-                        className={`w-8 h-8 rounded-full border-2 flex items-center justify-center cursor-not-allowed ${
-                          theme === "dark"
-                            ? "bg-gradient-to-br from-gray-400/20 to-gray-500/10 border-gray-400/30 opacity-40"
-                            : "bg-gradient-to-br from-gray-300/40 to-gray-400/30 border-gray-400/50 opacity-60"
-                        }`}
+                        className={`w-8 h-8 rounded-full border-2 flex items-center justify-center cursor-not-allowed ${theme === "dark"
+                          ? "bg-gradient-to-br from-gray-400/20 to-gray-500/10 border-gray-400/30 opacity-40"
+                          : "bg-gradient-to-br from-gray-300/40 to-gray-400/30 border-gray-400/50 opacity-60"
+                          }`}
                         title="Twitter"
                       >
                         <svg
@@ -796,11 +796,10 @@ export function ProfilePage({
                       </a>
                     ) : (
                       <div
-                        className={`w-8 h-8 rounded-full border-2 flex items-center justify-center cursor-not-allowed ${
-                          theme === "dark"
-                            ? "bg-gradient-to-br from-gray-400/20 to-gray-500/10 border-gray-400/30 opacity-40"
-                            : "bg-gradient-to-br from-gray-300/40 to-gray-400/30 border-gray-400/50 opacity-60"
-                        }`}
+                        className={`w-8 h-8 rounded-full border-2 flex items-center justify-center cursor-not-allowed ${theme === "dark"
+                          ? "bg-gradient-to-br from-gray-400/20 to-gray-500/10 border-gray-400/30 opacity-40"
+                          : "bg-gradient-to-br from-gray-300/40 to-gray-400/30 border-gray-400/50 opacity-60"
+                          }`}
                         title="Discord"
                       >
                         <svg
@@ -841,20 +840,18 @@ export function ProfilePage({
                         ) : (
                           <>
                             <div
-                              className={`text-[28px] font-black leading-none mb-1 drop-shadow-sm transition-colors ${
-                                theme === "dark"
-                                  ? "text-[#f5f5f5]"
-                                  : "text-[#2d2820]"
-                              }`}
+                              className={`text-[28px] font-black leading-none mb-1 drop-shadow-sm transition-colors ${theme === "dark"
+                                ? "text-[#f5f5f5]"
+                                : "text-[#2d2820]"
+                                }`}
                             >
                               {profileData?.contributions_count || 0}
                             </div>
                             <div
-                              className={`text-[12px] font-bold uppercase tracking-wider transition-colors ${
-                                theme === "dark"
-                                  ? "text-[#d4d4d4]"
-                                  : "text-[#7a6b5a]"
-                              }`}
+                              className={`text-[12px] font-bold uppercase tracking-wider transition-colors ${theme === "dark"
+                                ? "text-[#d4d4d4]"
+                                : "text-[#7a6b5a]"
+                                }`}
                             >
                               Contributions
                             </div>
@@ -885,20 +882,18 @@ export function ProfilePage({
                         ) : (
                           <>
                             <div
-                              className={`text-[28px] font-black leading-none mb-1 drop-shadow-sm transition-colors ${
-                                theme === "dark"
-                                  ? "text-[#f5f5f5]"
-                                  : "text-[#2d2820]"
-                              }`}
+                              className={`text-[28px] font-black leading-none mb-1 drop-shadow-sm transition-colors ${theme === "dark"
+                                ? "text-[#f5f5f5]"
+                                : "text-[#2d2820]"
+                                }`}
                             >
                               {profileData?.rewards_count || 0}
                             </div>
                             <div
-                              className={`text-[12px] font-bold uppercase tracking-wider transition-colors ${
-                                theme === "dark"
-                                  ? "text-[#d4d4d4]"
-                                  : "text-[#7a6b5a]"
-                              }`}
+                              className={`text-[12px] font-bold uppercase tracking-wider transition-colors ${theme === "dark"
+                                ? "text-[#d4d4d4]"
+                                : "text-[#7a6b5a]"
+                                }`}
                             >
                               Rewards
                             </div>
@@ -922,19 +917,17 @@ export function ProfilePage({
                         />
                       ) : (
                         <span
-                          className={`text-[15px] font-medium transition-colors ${
-                            theme === "dark"
-                              ? "text-[#d4d4d4]"
-                              : "text-[#7a6b5a]"
-                          }`}
+                          className={`text-[15px] font-medium transition-colors ${theme === "dark"
+                            ? "text-[#d4d4d4]"
+                            : "text-[#7a6b5a]"
+                            }`}
                         >
                           Contributor on{" "}
                           <span
-                            className={`font-black text-[16px] transition-colors ${
-                              theme === "dark"
-                                ? "text-[#f5f5f5]"
-                                : "text-[#2d2820]"
-                            }`}
+                            className={`font-black text-[16px] transition-colors ${theme === "dark"
+                              ? "text-[#f5f5f5]"
+                              : "text-[#2d2820]"
+                              }`}
                           >
                             {profileData?.projects_contributed_to_count || 0}
                           </span>{" "}
@@ -957,19 +950,17 @@ export function ProfilePage({
                         />
                       ) : (
                         <span
-                          className={`text-[15px] font-medium transition-colors ${
-                            theme === "dark"
-                              ? "text-[#d4d4d4]"
-                              : "text-[#7a6b5a]"
-                          }`}
+                          className={`text-[15px] font-medium transition-colors ${theme === "dark"
+                            ? "text-[#d4d4d4]"
+                            : "text-[#7a6b5a]"
+                            }`}
                         >
                           Lead{" "}
                           <span
-                            className={`font-black text-[16px] transition-colors ${
-                              theme === "dark"
-                                ? "text-[#f5f5f5]"
-                                : "text-[#2d2820]"
-                            }`}
+                            className={`font-black text-[16px] transition-colors ${theme === "dark"
+                              ? "text-[#f5f5f5]"
+                              : "text-[#2d2820]"
+                              }`}
                           >
                             {profileData?.projects_led_count || 0}
                           </span>{" "}
@@ -1066,9 +1057,8 @@ export function ProfilePage({
 
           <div className="relative flex items-center justify-between mb-6">
             <h2
-              className={`text-[20px] font-bold transition-colors ${
-                theme === "dark" ? "text-[#f5f5f5]" : "text-[#2d2820]"
-              }`}
+              className={`text-[20px] font-bold transition-colors ${theme === "dark" ? "text-[#f5f5f5]" : "text-[#2d2820]"
+                }`}
             >
               Projects led / Most
             </h2>
@@ -1083,11 +1073,10 @@ export function ProfilePage({
               Array.from({ length: 3 }).map((_, idx) => (
                 <div
                   key={idx}
-                  className={`backdrop-blur-[20px] rounded-[16px] border p-5 ${
-                    theme === "dark"
-                      ? "bg-white/[0.08] border-white/10"
-                      : "bg-white/[0.15] border-white/25"
-                  }`}
+                  className={`backdrop-blur-[20px] rounded-[16px] border p-5 ${theme === "dark"
+                    ? "bg-white/[0.08] border-white/10"
+                    : "bg-white/[0.15] border-white/25"
+                    }`}
                 >
                   <div className="flex items-center gap-3 mb-4">
                     <SkeletonLoader
@@ -1127,11 +1116,10 @@ export function ProfilePage({
                 return (
                   <div
                     key={project.id}
-                    className={`backdrop-blur-[20px] rounded-[16px] border p-5 hover:scale-105 hover:shadow-[0_12px_36px_rgba(0,0,0,0.12)] transition-all duration-300 cursor-pointer group/project ${
-                      theme === "dark"
-                        ? "bg-white/[0.08] border-white/10 hover:bg-white/[0.12] hover:border-white/15"
-                        : "bg-white/[0.15] border-white/25 hover:bg-white/[0.2] hover:border-white/40"
-                    }`}
+                    className={`backdrop-blur-[20px] rounded-[16px] border p-5 hover:scale-105 hover:shadow-[0_12px_36px_rgba(0,0,0,0.12)] transition-all duration-300 cursor-pointer group/project ${theme === "dark"
+                      ? "bg-white/[0.08] border-white/10 hover:bg-white/[0.12] hover:border-white/15"
+                      : "bg-white/[0.15] border-white/25 hover:bg-white/[0.2] hover:border-white/40"
+                      }`}
                     style={{
                       animationDelay: `${idx * 100}ms`,
                     }}
@@ -1156,11 +1144,10 @@ export function ProfilePage({
                       </div>
                       <div className="flex-1">
                         <h3
-                          className={`text-[16px] font-bold group-hover/project:text-[#c9983a] transition-colors ${
-                            theme === "dark"
-                              ? "text-[#f5f5f5]"
-                              : "text-[#2d2820]"
-                          }`}
+                          className={`text-[16px] font-bold group-hover/project:text-[#c9983a] transition-colors ${theme === "dark"
+                            ? "text-[#f5f5f5]"
+                            : "text-[#2d2820]"
+                            }`}
                         >
                           {projectName}
                         </h3>
@@ -1170,9 +1157,8 @@ export function ProfilePage({
                     {/* Project Metrics with Icons */}
                     <div className="flex items-center gap-3 mb-4 text-[13px]">
                       <div
-                        className={`flex items-center gap-1.5 group-hover/project:text-[#c9983a] transition-colors ${
-                          theme === "dark" ? "text-[#d4d4d4]" : "text-[#7a6b5a]"
-                        }`}
+                        className={`flex items-center gap-1.5 group-hover/project:text-[#c9983a] transition-colors ${theme === "dark" ? "text-[#d4d4d4]" : "text-[#7a6b5a]"
+                          }`}
                       >
                         <Star className="w-5 h-5" />
                         <span>
@@ -1180,9 +1166,8 @@ export function ProfilePage({
                         </span>
                       </div>
                       <div
-                        className={`flex items-center gap-1.5 group-hover/project:text-[#c9983a] transition-colors ${
-                          theme === "dark" ? "text-[#d4d4d4]" : "text-[#7a6b5a]"
-                        }`}
+                        className={`flex items-center gap-1.5 group-hover/project:text-[#c9983a] transition-colors ${theme === "dark" ? "text-[#d4d4d4]" : "text-[#7a6b5a]"
+                          }`}
                       >
                         <Users className="w-5 h-5" />
                         <span>
@@ -1190,9 +1175,8 @@ export function ProfilePage({
                         </span>
                       </div>
                       <div
-                        className={`flex items-center gap-1.5 group-hover/project:text-[#c9983a] transition-colors ${
-                          theme === "dark" ? "text-[#d4d4d4]" : "text-[#7a6b5a]"
-                        }`}
+                        className={`flex items-center gap-1.5 group-hover/project:text-[#c9983a] transition-colors ${theme === "dark" ? "text-[#d4d4d4]" : "text-[#7a6b5a]"
+                          }`}
                       >
                         <GitFork className="w-5 h-5" />
                         <span>
@@ -1204,63 +1188,57 @@ export function ProfilePage({
                     {/* Bottom Stats - Rewards and Merged PRs */}
                     <div className="grid grid-cols-2 gap-3">
                       <div
-                        className={`backdrop-blur-[15px] rounded-[10px] border p-3 group-hover/project:bg-white/[0.15] transition-all ${
-                          theme === "dark"
-                            ? "bg-white/[0.06] border-white/8"
-                            : "bg-white/[0.1] border-white/20"
-                        }`}
+                        className={`backdrop-blur-[15px] rounded-[10px] border p-3 group-hover/project:bg-white/[0.15] transition-all ${theme === "dark"
+                          ? "bg-white/[0.06] border-white/8"
+                          : "bg-white/[0.1] border-white/20"
+                          }`}
                       >
                         <div className="flex items-center gap-2 mb-2">
                           <div className="w-7 h-7 rounded-full bg-[#c9983a]/20 flex items-center justify-center group-hover/project:scale-110 transition-transform">
                             <DollarSign className="w-4 h-4 text-[#c9983a]" />
                           </div>
                           <span
-                            className={`text-[10px] font-medium transition-colors ${
-                              theme === "dark"
-                                ? "text-[#d4d4d4]"
-                                : "text-[#7a6b5a]"
-                            }`}
+                            className={`text-[10px] font-medium transition-colors ${theme === "dark"
+                              ? "text-[#d4d4d4]"
+                              : "text-[#7a6b5a]"
+                              }`}
                           >
                             Rewards
                           </span>
                         </div>
                         <div
-                          className={`text-[20px] font-bold transition-colors ${
-                            theme === "dark"
-                              ? "text-[#f5f5f5]"
-                              : "text-[#2d2820]"
-                          }`}
+                          className={`text-[20px] font-bold transition-colors ${theme === "dark"
+                            ? "text-[#f5f5f5]"
+                            : "text-[#2d2820]"
+                            }`}
                         >
                           0
                         </div>
                       </div>
                       <div
-                        className={`backdrop-blur-[15px] rounded-[10px] border p-3 group-hover/project:bg-white/[0.15] transition-all ${
-                          theme === "dark"
-                            ? "bg-white/[0.06] border-white/8"
-                            : "bg-white/[0.1] border-white/20"
-                        }`}
+                        className={`backdrop-blur-[15px] rounded-[10px] border p-3 group-hover/project:bg-white/[0.15] transition-all ${theme === "dark"
+                          ? "bg-white/[0.06] border-white/8"
+                          : "bg-white/[0.1] border-white/20"
+                          }`}
                       >
                         <div className="flex items-center gap-2 mb-2">
                           <div className="w-7 h-7 rounded-full bg-[#c9983a]/20 flex items-center justify-center group-hover/project:scale-110 transition-transform">
                             <GitMerge className="w-4 h-4 text-[#c9983a]" />
                           </div>
                           <span
-                            className={`text-[10px] font-medium transition-colors ${
-                              theme === "dark"
-                                ? "text-[#d4d4d4]"
-                                : "text-[#7a6b5a]"
-                            }`}
+                            className={`text-[10px] font-medium transition-colors ${theme === "dark"
+                              ? "text-[#d4d4d4]"
+                              : "text-[#7a6b5a]"
+                              }`}
                           >
                             Merged PRs
                           </span>
                         </div>
                         <div
-                          className={`text-[20px] font-bold transition-colors ${
-                            theme === "dark"
-                              ? "text-[#f5f5f5]"
-                              : "text-[#2d2820]"
-                          }`}
+                          className={`text-[20px] font-bold transition-colors ${theme === "dark"
+                            ? "text-[#f5f5f5]"
+                            : "text-[#2d2820]"
+                            }`}
                         >
                           0
                         </div>
@@ -1278,16 +1256,14 @@ export function ProfilePage({
                     className={`w-12 h-12 mx-auto mb-3 ${theme === "dark" ? "text-gray-500" : "text-gray-400"}`}
                   />
                   <p
-                    className={`text-[14px] font-medium mb-1 transition-colors ${
-                      theme === "dark" ? "text-[#d4d4d4]" : "text-[#7a6b5a]"
-                    }`}
+                    className={`text-[14px] font-medium mb-1 transition-colors ${theme === "dark" ? "text-[#d4d4d4]" : "text-[#7a6b5a]"
+                      }`}
                   >
                     No projects contributed yet
                   </p>
                   <p
-                    className={`text-[12px] transition-colors ${
-                      theme === "dark" ? "text-gray-500" : "text-gray-400"
-                    }`}
+                    className={`text-[12px] transition-colors ${theme === "dark" ? "text-gray-500" : "text-gray-400"
+                      }`}
                   >
                     Start contributing to projects to see them here
                   </p>
@@ -1304,9 +1280,8 @@ export function ProfilePage({
             <div className="flex items-center gap-2 mb-5">
               <Code className="w-5 h-5 text-[#c9983a]" />
               <h2
-                className={`text-[16px] font-bold transition-colors ${
-                  theme === "dark" ? "text-[#f5f5f5]" : "text-[#2d2820]"
-                }`}
+                className={`text-[16px] font-bold transition-colors ${theme === "dark" ? "text-[#f5f5f5]" : "text-[#2d2820]"
+                  }`}
               >
                 Most active languages
               </h2>
@@ -1366,11 +1341,10 @@ export function ProfilePage({
                           className="w-6 h-6"
                         />
                         <span
-                          className={`text-[15px] font-semibold transition-colors ${
-                            theme === "dark"
-                              ? "text-[#f5f5f5]"
-                              : "text-[#2d2820]"
-                          }`}
+                          className={`text-[15px] font-semibold transition-colors ${theme === "dark"
+                            ? "text-[#f5f5f5]"
+                            : "text-[#2d2820]"
+                            }`}
                         >
                           {language.name}
                         </span>
@@ -1379,11 +1353,10 @@ export function ProfilePage({
                         {Array.from({ length: 3 }).map((_, idx) => (
                           <div
                             key={idx}
-                            className={`w-2.5 h-2.5 rounded-full transition-all ${
-                              idx < language.activityLevel
-                                ? "bg-[#c9983a] shadow-[0_0_8px_rgba(201,152,58,0.6)] group-hover:scale-125"
-                                : "bg-white/20"
-                            }`}
+                            className={`w-2.5 h-2.5 rounded-full transition-all ${idx < language.activityLevel
+                              ? "bg-[#c9983a] shadow-[0_0_8px_rgba(201,152,58,0.6)] group-hover:scale-125"
+                              : "bg-white/20"
+                              }`}
                           />
                         ))}
                       </div>
@@ -1405,9 +1378,8 @@ export function ProfilePage({
             <div className="flex items-center gap-2 mb-5">
               <Globe className="w-5 h-5 text-[#c9983a]" />
               <h2
-                className={`text-[16px] font-bold transition-colors ${
-                  theme === "dark" ? "text-[#f5f5f5]" : "text-[#2d2820]"
-                }`}
+                className={`text-[16px] font-bold transition-colors ${theme === "dark" ? "text-[#f5f5f5]" : "text-[#2d2820]"
+                  }`}
               >
                 Most active ecosystems
               </h2>
@@ -1464,11 +1436,10 @@ export function ProfilePage({
                       <div className="flex items-center gap-3">
                         <Globe className="w-6 h-6 text-[#c9983a]" />
                         <span
-                          className={`text-[15px] font-semibold transition-colors ${
-                            theme === "dark"
-                              ? "text-[#f5f5f5]"
-                              : "text-[#2d2820]"
-                          }`}
+                          className={`text-[15px] font-semibold transition-colors ${theme === "dark"
+                            ? "text-[#f5f5f5]"
+                            : "text-[#2d2820]"
+                            }`}
                         >
                           {ecosystem.name}
                         </span>
@@ -1477,11 +1448,10 @@ export function ProfilePage({
                         {Array.from({ length: 3 }).map((_, idx) => (
                           <div
                             key={idx}
-                            className={`w-2.5 h-2.5 rounded-full transition-all ${
-                              idx < ecosystem.activityLevel
-                                ? "bg-[#c9983a] shadow-[0_0_8px_rgba(201,152,58,0.6)] group-hover:scale-125"
-                                : "bg-white/20"
-                            }`}
+                            className={`w-2.5 h-2.5 rounded-full transition-all ${idx < ecosystem.activityLevel
+                              ? "bg-[#c9983a] shadow-[0_0_8px_rgba(201,152,58,0.6)] group-hover:scale-125"
+                              : "bg-white/20"
+                              }`}
                           />
                         ))}
                       </div>
@@ -1509,9 +1479,8 @@ export function ProfilePage({
               <Trophy className="w-5 h-5 text-[#c9983a]" />
             </div>
             <h2
-              className={`text-[18px] font-bold transition-colors ${
-                theme === "dark" ? "text-[#f5f5f5]" : "text-[#2d2820]"
-              }`}
+              className={`text-[18px] font-bold transition-colors ${theme === "dark" ? "text-[#f5f5f5]" : "text-[#2d2820]"
+                }`}
             >
               Rewards Distribution
             </h2>
@@ -1637,18 +1606,16 @@ export function ProfilePage({
         <div className="backdrop-blur-[40px] bg-white/[0.18] rounded-[24px] border-2 border-white/30 shadow-[0_8px_32px_rgba(0,0,0,0.08)] p-8">
           <div className="flex items-center justify-between mb-6">
             <h2
-              className={`text-[18px] font-bold transition-colors ${
-                theme === "dark" ? "text-[#f5f5f5]" : "text-[#2d2820]"
-              }`}
+              className={`text-[18px] font-bold transition-colors ${theme === "dark" ? "text-[#f5f5f5]" : "text-[#2d2820]"
+                }`}
             >
               {isLoadingCalendar ? (
                 <SkeletonLoader variant="text" width="200px" height="32px" />
               ) : (
                 <>
                   <span
-                    className={`text-[32px] font-black transition-colors ${
-                      theme === "dark" ? "text-[#f5f5f5]" : "text-[#2d2820]"
-                    }`}
+                    className={`text-[32px] font-black transition-colors ${theme === "dark" ? "text-[#f5f5f5]" : "text-[#2d2820]"
+                      }`}
                   >
                     {contributionCalendar.reduce(
                       (sum, day) => sum + day.count,
@@ -1656,9 +1623,8 @@ export function ProfilePage({
                     )}
                   </span>
                   <span
-                    className={`text-[16px] ml-2 transition-colors ${
-                      theme === "dark" ? "text-[#d4d4d4]" : "text-[#7a6b5a]"
-                    }`}
+                    className={`text-[16px] ml-2 transition-colors ${theme === "dark" ? "text-[#d4d4d4]" : "text-[#7a6b5a]"
+                      }`}
                   >
                     contributions last year
                   </span>
@@ -1676,9 +1642,8 @@ export function ProfilePage({
                 {months.map((month, idx) => (
                   <div
                     key={idx}
-                    className={`text-[13px] font-bold transition-colors ${
-                      theme === "dark" ? "text-[#f5f5f5]" : "text-[#2d2820]"
-                    }`}
+                    className={`text-[13px] font-bold transition-colors ${theme === "dark" ? "text-[#f5f5f5]" : "text-[#2d2820]"
+                      }`}
                   >
                     {month}
                   </div>
@@ -1691,33 +1656,29 @@ export function ProfilePage({
               {/* Day of week labels */}
               <div className="flex flex-col justify-between py-[3px]">
                 <div
-                  className={`h-[14px] text-[12px] font-bold flex items-center transition-colors ${
-                    theme === "dark" ? "text-[#f5f5f5]" : "text-[#2d2820]"
-                  }`}
+                  className={`h-[14px] text-[12px] font-bold flex items-center transition-colors ${theme === "dark" ? "text-[#f5f5f5]" : "text-[#2d2820]"
+                    }`}
                 >
                   Mon
                 </div>
                 <div className="h-[14px]" />
                 <div
-                  className={`h-[14px] text-[12px] font-bold flex items-center transition-colors ${
-                    theme === "dark" ? "text-[#f5f5f5]" : "text-[#2d2820]"
-                  }`}
+                  className={`h-[14px] text-[12px] font-bold flex items-center transition-colors ${theme === "dark" ? "text-[#f5f5f5]" : "text-[#2d2820]"
+                    }`}
                 >
                   Wed
                 </div>
                 <div className="h-[14px]" />
                 <div
-                  className={`h-[14px] text-[12px] font-bold flex items-center transition-colors ${
-                    theme === "dark" ? "text-[#f5f5f5]" : "text-[#2d2820]"
-                  }`}
+                  className={`h-[14px] text-[12px] font-bold flex items-center transition-colors ${theme === "dark" ? "text-[#f5f5f5]" : "text-[#2d2820]"
+                    }`}
                 >
                   Fri
                 </div>
                 <div className="h-[14px]" />
                 <div
-                  className={`h-[14px] text-[12px] font-bold flex items-center transition-colors ${
-                    theme === "dark" ? "text-[#f5f5f5]" : "text-[#2d2820]"
-                  }`}
+                  className={`h-[14px] text-[12px] font-bold flex items-center transition-colors ${theme === "dark" ? "text-[#f5f5f5]" : "text-[#2d2820]"
+                    }`}
                 >
                   Sun
                 </div>
@@ -1826,9 +1787,8 @@ export function ProfilePage({
         {/* Contributions Activity */}
         <div className="backdrop-blur-[40px] bg-white/[0.12] rounded-[24px] border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.08)] p-8">
           <h2
-            className={`text-[20px] font-bold mb-6 transition-colors ${
-              theme === "dark" ? "text-[#f5f5f5]" : "text-[#2d2820]"
-            }`}
+            className={`text-[20px] font-bold mb-6 transition-colors ${theme === "dark" ? "text-[#f5f5f5]" : "text-[#2d2820]"
+              }`}
           >
             Contributions Activity
           </h2>
@@ -1837,20 +1797,18 @@ export function ProfilePage({
           <div className="flex items-center gap-3 mb-6">
             <div className="relative flex-1">
               <Search
-                className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${
-                  theme === "dark" ? "text-[#d4d4d4]" : "text-[#7a6b5a]"
-                }`}
+                className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${theme === "dark" ? "text-[#d4d4d4]" : "text-[#7a6b5a]"
+                  }`}
               />
               <input
                 type="text"
                 placeholder="Search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className={`w-full pl-12 pr-4 py-3 rounded-[12px] backdrop-blur-[30px] bg-white/[0.15] border border-white/25 focus:outline-none focus:bg-white/[0.2] focus:border-[#c9983a]/40 transition-all text-[13px] ${
-                  theme === "dark"
-                    ? "text-[#f5f5f5] placeholder-[#d4d4d4]"
-                    : "text-[#2d2820] placeholder-[#7a6b5a]"
-                }`}
+                className={`w-full pl-12 pr-4 py-3 rounded-[12px] backdrop-blur-[30px] bg-white/[0.15] border border-white/25 focus:outline-none focus:bg-white/[0.2] focus:border-[#c9983a]/40 transition-all text-[13px] ${theme === "dark"
+                  ? "text-[#f5f5f5] placeholder-[#d4d4d4]"
+                  : "text-[#2d2820] placeholder-[#7a6b5a]"
+                  }`}
               />
             </div>
           </div>
@@ -1912,21 +1870,18 @@ export function ProfilePage({
                     className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-white/[0.05] transition-all group"
                   >
                     <Calendar
-                      className={`w-4 h-4 group-hover:text-[#c9983a] transition-colors flex-shrink-0 ${
-                        theme === "dark" ? "text-[#d4d4d4]" : "text-[#7a6b5a]"
-                      }`}
+                      className={`w-4 h-4 group-hover:text-[#c9983a] transition-colors flex-shrink-0 ${theme === "dark" ? "text-[#d4d4d4]" : "text-[#7a6b5a]"
+                        }`}
                     />
                     <span
-                      className={`text-[14px] font-semibold flex-1 text-left transition-colors ${
-                        theme === "dark" ? "text-[#f5f5f5]" : "text-[#2d2820]"
-                      }`}
+                      className={`text-[14px] font-semibold flex-1 text-left transition-colors ${theme === "dark" ? "text-[#f5f5f5]" : "text-[#2d2820]"
+                        }`}
                     >
                       {month}
                     </span>
                     <ChevronRight
-                      className={`w-4 h-4 transition-all duration-200 ${
-                        expandedMonths[month] ? "rotate-90" : ""
-                      } ${theme === "dark" ? "text-[#d4d4d4]" : "text-[#7a6b5a]"}`}
+                      className={`w-4 h-4 transition-all duration-200 ${expandedMonths[month] ? "rotate-90" : ""
+                        } ${theme === "dark" ? "text-[#d4d4d4]" : "text-[#7a6b5a]"}`}
                     />
                   </button>
 
@@ -1988,11 +1943,10 @@ export function ProfilePage({
                                   onIssueClick(item.id, item.project_id);
                                 }
                               }}
-                              className={`flex items-center gap-4 py-2.5 hover:bg-white/[0.08] -mx-2 px-2 rounded-lg transition-all group/item ${
-                                item.type === "issue"
-                                  ? "cursor-pointer"
-                                  : "cursor-default"
-                              }`}
+                              className={`flex items-center gap-4 py-2.5 hover:bg-white/[0.08] -mx-2 px-2 rounded-lg transition-all group/item ${item.type === "issue"
+                                ? "cursor-pointer"
+                                : "cursor-default"
+                                }`}
                             >
                               {/* Icon + Number Badge */}
                               <div className="relative z-10 flex items-center gap-2.5 flex-shrink-0">
@@ -2025,11 +1979,10 @@ export function ProfilePage({
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-1">
                                   <h4
-                                    className={`text-[15px] font-medium transition-colors ${
-                                      theme === "dark"
-                                        ? "text-[#f5f5f5] group-hover/item:text-[#d4d4d4]"
-                                        : "text-[#2d2820] group-hover/item:text-[#4a3f2f]"
-                                    }`}
+                                    className={`text-[15px] font-medium transition-colors ${theme === "dark"
+                                      ? "text-[#f5f5f5] group-hover/item:text-[#d4d4d4]"
+                                      : "text-[#2d2820] group-hover/item:text-[#4a3f2f]"
+                                      }`}
                                   >
                                     {labelPrefix}
                                     {item.title}
@@ -2038,11 +1991,10 @@ export function ProfilePage({
                                   {prStateBadge}
                                 </div>
                                 <p
-                                  className={`text-[13px] transition-colors ${
-                                    theme === "dark"
-                                      ? "text-[#d4d4d4]/70"
-                                      : "text-[#7a6b5a]/70"
-                                  }`}
+                                  className={`text-[13px] transition-colors ${theme === "dark"
+                                    ? "text-[#d4d4d4]/70"
+                                    : "text-[#7a6b5a]/70"
+                                    }`}
                                 >
                                   {item.project}
                                 </p>
@@ -2050,11 +2002,10 @@ export function ProfilePage({
 
                               {/* Date */}
                               <span
-                                className={`text-[13px] font-medium whitespace-nowrap flex-shrink-0 transition-colors ${
-                                  theme === "dark"
-                                    ? "text-[#d4d4d4]"
-                                    : "text-[#7a6b5a]"
-                                }`}
+                                className={`text-[13px] font-medium whitespace-nowrap flex-shrink-0 transition-colors ${theme === "dark"
+                                  ? "text-[#d4d4d4]"
+                                  : "text-[#7a6b5a]"
+                                  }`}
                               >
                                 {item.date}
                               </span>

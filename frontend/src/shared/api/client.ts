@@ -25,9 +25,7 @@ export const removeAuthToken = (): void => {
   localStorage.removeItem("patchwork_jwt");
   if (typeof window !== "undefined") {
     window.dispatchEvent(
-      new CustomEvent("patchwork-auth-token", {
-        detail: { token: null },
-      }),
+      new CustomEvent("patchwork-auth-token", { detail: { token: null } }),
     );
   }
 };
@@ -60,8 +58,7 @@ async function apiRequest<T>(
   // Avoid forcing CORS preflight for simple GET/HEAD requests by only setting
   // Content-Type when we actually send a JSON body.
   const method = (fetchOptions.method || "GET").toUpperCase();
-  const hasBody =
-    fetchOptions.body !== undefined && fetchOptions.body !== null;
+  const hasBody = fetchOptions.body !== undefined && fetchOptions.body !== null;
   if (hasBody && !(fetchOptions.body instanceof FormData)) {
     requestHeaders["Content-Type"] = "application/json";
   } else if (
@@ -151,10 +148,7 @@ async function apiRequest<T>(
     return jsonData;
   } catch (err) {
     // If response is empty or not JSON, return empty array for list endpoints
-    if (
-      endpoint.includes("/projects/mine") ||
-      endpoint.includes("/projects")
-    ) {
+    if (endpoint.includes("/projects/mine") || endpoint.includes("/projects")) {
       return [] as T;
     }
     throw new Error("Invalid response from server");
@@ -177,8 +171,7 @@ export type LandingStats = {
   grants_distributed_usd: number;
 };
 
-export const getLandingStats = () =>
-  apiRequest<LandingStats>("/stats/landing");
+export const getLandingStats = () => apiRequest<LandingStats>("/stats/landing");
 
 // Authentication
 export const getCurrentUser = () =>
@@ -373,14 +366,11 @@ export const updateProfile = (data: {
   });
 
 export const updateAvatar = (avatarUrl: string) =>
-  apiRequest<{ message: string; avatar_url: string }>(
-    "/profile/avatar",
-    {
-      method: "PUT",
-      body: JSON.stringify({ avatar_url: avatarUrl }),
-      requiresAuth: true,
-    },
-  );
+  apiRequest<{ message: string; avatar_url: string }>("/profile/avatar", {
+    method: "PUT",
+    body: JSON.stringify({ avatar_url: avatarUrl }),
+    requiresAuth: true,
+  });
 
 // Projects
 export const getPublicProjects = (params?: {
@@ -392,22 +382,15 @@ export const getPublicProjects = (params?: {
   offset?: number;
 }) => {
   const queryParams = new URLSearchParams();
-  if (params?.ecosystem)
-    queryParams.append("ecosystem", params.ecosystem);
-  if (params?.language)
-    queryParams.append("language", params.language);
-  if (params?.category)
-    queryParams.append("category", params.category);
+  if (params?.ecosystem) queryParams.append("ecosystem", params.ecosystem);
+  if (params?.language) queryParams.append("language", params.language);
+  if (params?.category) queryParams.append("category", params.category);
   if (params?.tags) queryParams.append("tags", params.tags);
-  if (params?.limit)
-    queryParams.append("limit", params.limit.toString());
-  if (params?.offset)
-    queryParams.append("offset", params.offset.toString());
+  if (params?.limit) queryParams.append("limit", params.limit.toString());
+  if (params?.offset) queryParams.append("offset", params.offset.toString());
 
   const queryString = queryParams.toString();
-  const endpoint = queryString
-    ? `/projects?${queryString}`
-    : "/projects";
+  const endpoint = queryString ? `/projects?${queryString}` : "/projects";
 
   return apiRequest<{
     projects: Array<{
@@ -586,10 +569,7 @@ export const getAdminOpenSourceWeekEvents = () =>
       created_at: string;
       updated_at: string;
     }>;
-  }>("/admin/open-source-week/events", {
-    requiresAuth: true,
-    method: "GET",
-  });
+  }>("/admin/open-source-week/events", { requiresAuth: true, method: "GET" });
 
 export const createOpenSourceWeekEvent = (data: {
   title: string;
@@ -606,13 +586,10 @@ export const createOpenSourceWeekEvent = (data: {
   });
 
 export const deleteOpenSourceWeekEvent = (id: string) =>
-  apiRequest<{ ok: boolean }>(
-    `/admin/open-source-week/events/${id}`,
-    {
-      requiresAuth: true,
-      method: "DELETE",
-    },
-  );
+  apiRequest<{ ok: boolean }>(`/admin/open-source-week/events/${id}`, {
+    requiresAuth: true,
+    method: "DELETE",
+  });
 
 export const createEcosystem = (data: {
   name: string;
@@ -665,7 +642,7 @@ export const deleteEcosystem = (id: string) =>
   });
 
 // Leaderboard
-export const getLeaderboard = (limit = 10, offset = 0) =>
+export const getLeaderboard = (limit = 10, offset = 0, ecosystem?: string) =>
   apiRequest<
     Array<{
       rank: number;
@@ -680,7 +657,11 @@ export const getLeaderboard = (limit = 10, offset = 0) =>
       trend: "up" | "down" | "same";
       trendValue: number;
     }>
-  >(`/leaderboard?limit=${limit}&offset=${offset}`);
+  >(
+    `/leaderboard?limit=${limit}&offset=${offset}${
+      ecosystem ? `&ecosystem=${ecosystem}` : ""
+    }`,
+  );
 
 // Admin Bootstrap
 export const bootstrapAdmin = (bootstrapToken: string) =>

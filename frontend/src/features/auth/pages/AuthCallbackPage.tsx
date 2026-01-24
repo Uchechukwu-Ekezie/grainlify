@@ -52,7 +52,7 @@ export function AuthCallbackPage() {
           // Redirect to signin after 3 seconds
           setTimeout(() => navigate('/signin'), 3000);
           return;
-        }
+        
 
         if (!token) {
           console.error('No token found in URL');
@@ -74,10 +74,10 @@ export function AuthCallbackPage() {
         setIsProcessing(false);
         setTimeout(() => navigate('/signin'), 3000);
       }
-    };
-
+    }
+  
     handleCallback();
-  }, [login, navigate]);
+ }, [login, navigate]);
 
   return (
     <div className={`min-h-screen flex items-center justify-center transition-colors ${

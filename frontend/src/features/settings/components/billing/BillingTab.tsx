@@ -277,6 +277,16 @@ export function BillingTab() {
   const handleAddPaymentMethod = (method: PaymentMethod) => {
     if (!selectedProfile) return;
 
+    // Checked for the  duplicate token type (secondary validation)
+    const existingWallet = selectedProfile.paymentMethods?.find(
+      pm => pm.cryptoType === method.cryptoType
+    );
+    
+    if (existingWallet) {
+      console.warn(`Duplicate wallet prevented: ${method.cryptoType} already exists`);
+      return;
+    }
+
     const updatedProfile = {
       ...selectedProfile,
       paymentMethods: [...(selectedProfile.paymentMethods || []), method],

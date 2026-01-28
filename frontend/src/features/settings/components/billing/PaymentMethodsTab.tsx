@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Trash2, Wallet, Copy, CheckCircle2, Star, X } from 'lucide-react';
+import { Plus, Trash2, Wallet, Copy, CheckCircle2, Star, X, AlertCircle } from 'lucide-react';
 import { useTheme } from '../../../../shared/contexts/ThemeContext';
 import { PaymentMethod, EcosystemType, CryptoType } from '../../types';
 
@@ -23,11 +23,28 @@ export function PaymentMethodsTab({
   const [selectedCrypto, setSelectedCrypto] = useState<CryptoType>('usdc');
   const [walletAddress, setWalletAddress] = useState('');
   const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [validationError, setValidationError] = useState<string>('');
 
   const getAvailableCryptos = (): CryptoType[] => ['usdc', 'usdt', 'xlm'];
 
+  const checkDuplicateToken = (cryptoType: CryptoType): string => {
+    const existingWallet = paymentMethods.find(method => method.cryptoType === cryptoType);
+    if (existingWallet) {
+      const tokenLabel = getCryptoLabel(cryptoType);
+      return `You already have a ${tokenLabel} wallet configured. Please edit the existing wallet instead.`;
+    }
+    return '';
+  };
+
   const handleAddPaymentMethod = () => {
     if (!walletAddress.trim()) return;
+
+    // Check for duplicate token type
+    const duplicateError = checkDuplicateToken(selectedCrypto);
+    if (duplicateError) {
+      setValidationError(duplicateError);
+      return;
+    }
 
     const newMethod: PaymentMethod = {
       id: Date.now(),
@@ -42,6 +59,7 @@ export function PaymentMethodsTab({
     setShowAddModal(false);
     setWalletAddress('');
     setSelectedCrypto('usdc');
+    setValidationError('');
   };
 
   const handleCopyAddress = (id: number, address: string) => {
@@ -54,6 +72,13 @@ export function PaymentMethodsTab({
 
   const getCryptoLabel = (crypto: CryptoType) => {
     return crypto.toUpperCase();
+  };
+
+  // Validate when crypto selection changes
+  const handleCryptoChange = (crypto: CryptoType) => {
+    setSelectedCrypto(crypto);
+    const error = checkDuplicateToken(crypto);
+    setValidationError(error);
   };
 
   return (
@@ -243,7 +268,7 @@ export function PaymentMethodsTab({
                   {getAvailableCryptos().map((crypto) => (
                     <button
                       key={crypto}
-                      onClick={() => setSelectedCrypto(crypto)}
+                      onClick={() => handleCryptoChange(crypto)}
                       className={`px-4 py-3 rounded-[12px] backdrop-blur-[25px] border-2 transition-all ${
                         selectedCrypto === crypto
                           ? 'border-[#c9983a] bg-[#c9983a]/10'
@@ -285,6 +310,18 @@ export function PaymentMethodsTab({
                 }`}>
                   Make sure this address is correct. Payments sent to wrong addresses cannot be recovered.
                 </p>
+                {validationError && (
+                  <div className={`flex items-start gap-2 mt-3 p-3 rounded-[10px] border transition-colors ${
+                    theme === 'dark'
+                      ? 'bg-[#dc2626]/10 border-[#dc2626]/30'
+                      : 'bg-[#dc2626]/5 border-[#dc2626]/20'
+                  }`}>
+                    <AlertCircle className="w-4 h-4 text-[#dc2626] flex-shrink-0 mt-0.5" />
+                    <p className="text-[13px] text-[#dc2626] font-medium">
+                      {validationError}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -301,7 +338,7 @@ export function PaymentMethodsTab({
               </button>
               <button
                 onClick={handleAddPaymentMethod}
-                disabled={!walletAddress.trim()}
+                disabled={!walletAddress.trim() || !!validationError}
                 className="flex-1 px-6 py-3 rounded-[12px] bg-gradient-to-br from-[#c9983a] to-[#a67c2e] text-white font-semibold text-[14px] shadow-[0_4px_16px_rgba(162,121,44,0.3)] hover:shadow-[0_6px_20px_rgba(162,121,44,0.4)] transition-all border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Add Wallet

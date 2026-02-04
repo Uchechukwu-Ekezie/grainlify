@@ -1,49 +1,40 @@
 ---
-description: Grainlify documentation – product, concepts, architecture, and guides.
+description: Introduction to Grainlify – what it is, who it is for, and how it works.
 ---
 
-# Grainlify Documentation
+# Introduction
 
-Grainlify is **grant execution infrastructure for open-source ecosystems**. It converts ecosystem funding into **automated, verifiable, non‑custodial payouts** for open‑source contributions, using on‑chain escrow and off‑chain intelligence tied to real GitHub work.
+Welcome to **Grainlify**, the grant execution layer for open‑source ecosystems.
 
-This documentation is written for a **production deployment** of Grainlify and is intended for:
+Grainlify connects open‑source projects with ecosystem funding and **automates payouts** for real GitHub contributions. Ecosystems lock funds into on‑chain escrows, maintainers turn issues into funded bounties, and contributors get **fair, non‑custodial rewards** when their work is merged.
 
-- **Ecosystem teams** (foundations, DAOs, L1/L2 orgs) running grant programs and hackathons.
-- **Project maintainers** registering repositories and managing bounties.
-- **Contributors** earning rewards for GitHub issues and pull requests.
-- **Operators / developers** deploying, operating, and integrating Grainlify.
+Whether you’re a maintainer looking to grow your repo, an ecosystem team running programs, or a contributor searching for real‑world impact, **Grainlify** is the place to start, contribute, and thrive.
 
 ---
 
-## How to Use This Documentation
+## What You Can Do Here
 
-- **Read `product-overview.md`** to understand what Grainlify is and why it exists.
-- **Read `user-roles.md`** to understand which persona you are and what you can do.
-- **Read the persona guides** (`for-ecosystems.md`, `for-maintainers.md`, `for-contributors.md`) for step‑by‑step flows.
-- **Read `architecture.md` and `smart-contracts.md`** if you care about how Grainlify works under the hood.
-- **Read `security-and-compliance.md`** to understand KYC, data, and security guarantees.
-
-You can import all files in this `docs` folder into GitBook and organize them as chapters.
-
----
-
-## Documentation Map
-
-- **Product & Concepts**
-  - `product-overview.md` – problem, solution, core concepts, and execution modes.
-  - `user-roles.md` – Ecosystem, Maintainer, Contributor, Admin and what each can do.
-- **Persona Guides**
-  - `for-ecosystems.md` – how to run programs, fund escrows, and read impact.
-  - `for-maintainers.md` – how to register projects, set up bounties, and manage funds.
-  - `for-contributors.md` – how to connect GitHub, pass KYC, and get paid.
-- **System & Operations**
-  - `architecture.md` – high‑level architecture, data model, and request flows.
-  - `smart-contracts.md` – on‑chain design, guarantees, and limitations.
-  - `security-and-compliance.md` – KYC, privacy, and security model.
+- **Explore how Grainlify works** in one place:
+  - What Grainlify is solving and how it fits into the grant stack.
+  - How funds move from ecosystems → programs → projects → contributors.
+- **Learn your role**:
+  - Ecosystem teams: how to fund programs and get verifiable impact.
+  - Maintainers: how to register projects and create funded bounties.
+  - Contributors: how to work via GitHub and get paid automatically.
+- **Understand the system** (optional, for technical readers):
+  - Architecture, smart contracts, security, and compliance.
 
 ---
 
-## One‑Sentence Summary
+## Next Steps
 
-**Grainlify turns ecosystem grants into automatic, verifiable, non‑custodial payouts for real open‑source work.**
+- **New to Grainlify?** Start with **Product Overview**.
+- **Want to know what you can do?** Read **User Roles**.
+- **Ready to use it?**
+  - Ecosystem teams → **Guide for Ecosystem Teams**
+  - Maintainers → **Guide for Project Maintainers**
+  - Contributors → **Guide for Contributors**
+
+You can configure GitBook so this page appears as the first item in the sidebar, and then link the rest of the docs as core info, concepts, and guides.
+
 

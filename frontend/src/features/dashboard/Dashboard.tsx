@@ -76,8 +76,17 @@ export function Dashboard() {
   const navigate = useNavigate();
   // const [currentPage, setCurrentPage] = useState('discover');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
-    null,
+    () => {
+      if (typeof window === "undefined") return null;
+      const params = new URLSearchParams(window.location.search);
+      return params.get("project");
+    },
   );
+  const [projectBackTarget, setProjectBackTarget] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    const params = new URLSearchParams(window.location.search);
+    return params.get("from");
+  });
   const [selectedIssue, setSelectedIssue] = useState<{
     issueId: string;
     projectId?: string;
@@ -210,9 +219,15 @@ export function Dashboard() {
     } else if (currentPage === "profile") {
       params.delete("user");
     }
-    if (selectedProjectId) params.set("project", selectedProjectId);
-    else if (params.get("project")) { /* keep from URL until deep-link effect sets state */ }
-    else params.delete("project");
+    if (selectedProjectId) {
+      params.set("project", selectedProjectId);
+      if (projectBackTarget) {
+        params.set("from", projectBackTarget);
+      }
+    } else {
+      params.delete("project");
+      params.delete("from");
+    }
     if (selectedIssue?.issueId && selectedIssue?.projectId) params.set("issue", selectedIssue.issueId);
     else if (params.get("issue")) { /* keep from URL until deep-link effect sets state */ }
     else params.delete("issue");
@@ -248,6 +263,7 @@ export function Dashboard() {
   const handleNavigation = (page: string) => {
     setCurrentPage(page);
     setSelectedProjectId(null);
+    setProjectBackTarget(null);
     setSelectedIssue(null);
     setSelectedEcosystemId(null);
     setSelectedEcosystemName(null);
@@ -731,7 +747,26 @@ export function Dashboard() {
             ) : selectedProjectId ? (
               <ProjectDetailPage
                 projectId={selectedProjectId}
-                onBack={() => setSelectedProjectId(null)}
+                backLabel={
+                  projectBackTarget === "browse"
+                    ? "Back to Browse"
+                    : projectBackTarget === "profile"
+                      ? "Back to Profile"
+                      : projectBackTarget === "leaderboard"
+                        ? "Back to Leaderboard"
+                        : projectBackTarget === "ecosystems"
+                          ? "Back to Ecosystems"
+                          : projectBackTarget === "discover"
+                            ? "Back to Discover"
+                            : "Back"
+                }
+                onBack={() => {
+                  setSelectedProjectId(null);
+                  if (projectBackTarget) {
+                    setCurrentPage(projectBackTarget as any);
+                  }
+                  setProjectBackTarget(null);
+                }}
                 onIssueClick={(issueId, projectId) =>
                   setSelectedIssue({ issueId, projectId })
                 }
@@ -749,7 +784,10 @@ export function Dashboard() {
                 )}
                 {currentPage === "browse" && (
                   <BrowsePage
-                    onProjectClick={(id) => setSelectedProjectId(id)}
+                    onProjectClick={(id) => {
+                      setSelectedProjectId(id);
+                      setProjectBackTarget("browse");
+                    }}
                   />
                 )}
                 {currentPage === "osw" && !selectedEventId && (
@@ -784,7 +822,10 @@ export function Dashboard() {
                       initialDescription={selectedEcosystemDescription}
                       initialLogoUrl={selectedEcosystemLogoUrl}
                       onBack={handleBackFromEcosystem}
-                      onProjectClick={(id) => setSelectedProjectId(id)}
+                      onProjectClick={(id) => {
+                        setSelectedProjectId(id);
+                        setProjectBackTarget("ecosystems");
+                      }}
                     />
                   )}
                 {currentPage === "contributors" && <ContributorsPage />}
@@ -805,6 +846,7 @@ export function Dashboard() {
                     }}
                     onProjectClick={(id) => {
                       setSelectedProjectId(id);
+                      setProjectBackTarget("profile");
                       setCurrentPage("discover");
                     }}
                     onIssueClick={(issueId, projectId) => {
@@ -857,6 +899,7 @@ export function Dashboard() {
                     }}
                     onProjectClick={(id) => {
                       setSelectedProjectId(id);
+                      setProjectBackTarget("discover");
                       setCurrentPage("discover");
                     }}
                     onContributorClick={(id) => {

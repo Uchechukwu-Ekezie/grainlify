@@ -850,7 +850,7 @@ impl ProgramEscrowContract {
         let caller = authorized_payout_key.clone();
 
         // Validate program_id
-        if program_id.len() == 0 {
+        if program_id.is_empty() {
             monitoring::track_operation(&env, symbol_short!("init_prg"), caller, false);
             panic!("Program ID cannot be empty");
         }
@@ -1065,7 +1065,7 @@ impl ProgramEscrowContract {
         // Apply rate limiting
         anti_abuse::check_rate_limit(&env, env.current_contract_address());
 
-        let start = env.ledger().timestamp();
+        let _start = env.ledger().timestamp();
         let caller = env.current_contract_address();
 
         // Validate amount
@@ -1385,7 +1385,7 @@ impl ProgramEscrowContract {
             (BATCH_PAYOUT,),
             (
                 program_id,
-                recipients.len() as u32,
+                recipients.len(),
                 total_payout,
                 updated_data.remaining_balance,
             ),
@@ -2261,7 +2261,7 @@ impl ProgramEscrowContract {
         let mut fee_config = Self::get_fee_config_internal(&env);
 
         if let Some(rate) = lock_fee_rate {
-            if rate < 0 || rate > MAX_FEE_RATE {
+            if !(0..=MAX_FEE_RATE).contains(&rate) {
                 panic!(
                     "Invalid lock fee rate: must be between 0 and {}",
                     MAX_FEE_RATE
@@ -2271,7 +2271,7 @@ impl ProgramEscrowContract {
         }
 
         if let Some(rate) = payout_fee_rate {
-            if rate < 0 || rate > MAX_FEE_RATE {
+            if !(0..=MAX_FEE_RATE).contains(&rate) {
                 panic!(
                     "Invalid payout fee rate: must be between 0 and {}",
                     MAX_FEE_RATE

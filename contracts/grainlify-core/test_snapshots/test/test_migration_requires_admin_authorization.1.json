@@ -18,7 +18,7 @@
                   "u32": 3
                 },
                 {
-                  "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                  "bytes": "0303030303030303030303030303030303030303030303030303030303030303"
                 }
               ]
             }
@@ -26,32 +26,7 @@
           "sub_invocations": []
         }
       ]
-    ],
-    [],
-    [
-      [
-        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
-        {
-          "function": {
-            "contract_fn": {
-              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-              "function_name": "migrate",
-              "args": [
-                {
-                  "u32": 3
-                },
-                {
-                  "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
-                }
-              ]
-            }
-          },
-          "sub_invocations": []
-        }
-      ]
-    ],
-    [],
-    []
+    ]
   ],
   "ledger": {
     "protocol_version": 21,
@@ -340,7 +315,7 @@
                                 "symbol": "migration_hash"
                               },
                               "val": {
-                                "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                                "bytes": "0303030303030303030303030303030303030303030303030303030303030303"
                               }
                             },
                             {
@@ -398,39 +373,6 @@
                 "key": {
                   "ledger_key_nonce": {
                     "nonce": 801925984706572462
-                  }
-                },
-                "durability": "temporary",
-                "val": "void"
-              }
-            },
-            "ext": "v0"
-          },
-          6311999
-        ]
-      ],
-      [
-        {
-          "contract_data": {
-            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
-            "key": {
-              "ledger_key_nonce": {
-                "nonce": 5541220902715666415
-              }
-            },
-            "durability": "temporary"
-          }
-        },
-        [
-          {
-            "last_modified_ledger_seq": 0,
-            "data": {
-              "contract_data": {
-                "ext": "v0",
-                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
-                "key": {
-                  "ledger_key_nonce": {
-                    "nonce": 5541220902715666415
                   }
                 },
                 "durability": "temporary",
@@ -641,7 +583,7 @@
                   "u32": 3
                 },
                 {
-                  "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                  "bytes": "0303030303030303030303030303030303030303030303030303030303030303"
                 }
               ]
             }
@@ -683,7 +625,7 @@
                     "symbol": "migration_hash"
                   },
                   "val": {
-                    "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                    "bytes": "0303030303030303030303030303030303030303030303030303030303030303"
                   }
                 },
                 {
@@ -837,234 +779,6 @@
               }
             ],
             "data": "void"
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": null,
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_call"
-              },
-              {
-                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
-              },
-              {
-                "symbol": "get_version"
-              }
-            ],
-            "data": "void"
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_return"
-              },
-              {
-                "symbol": "get_version"
-              }
-            ],
-            "data": {
-              "u32": 3
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": null,
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_call"
-              },
-              {
-                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
-              },
-              {
-                "symbol": "migrate"
-              }
-            ],
-            "data": {
-              "vec": [
-                {
-                  "u32": 3
-                },
-                {
-                  "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
-                }
-              ]
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_return"
-              },
-              {
-                "symbol": "migrate"
-              }
-            ],
-            "data": "void"
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": null,
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_call"
-              },
-              {
-                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
-              },
-              {
-                "symbol": "get_version"
-              }
-            ],
-            "data": "void"
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_return"
-              },
-              {
-                "symbol": "get_version"
-              }
-            ],
-            "data": {
-              "u32": 3
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": null,
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_call"
-              },
-              {
-                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
-              },
-              {
-                "symbol": "get_migration_state"
-              }
-            ],
-            "data": "void"
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_return"
-              },
-              {
-                "symbol": "get_migration_state"
-              }
-            ],
-            "data": {
-              "map": [
-                {
-                  "key": {
-                    "symbol": "from_version"
-                  },
-                  "val": {
-                    "u32": 2
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "migrated_at"
-                  },
-                  "val": {
-                    "u64": 0
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "migration_hash"
-                  },
-                  "val": {
-                    "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "to_version"
-                  },
-                  "val": {
-                    "u32": 3
-                  }
-                }
-              ]
-            }
           }
         }
       },

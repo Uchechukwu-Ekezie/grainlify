@@ -39,7 +39,7 @@
                 {
                   "i128": {
                     "hi": 0,
-                    "lo": 100000
+                    "lo": 35000
                   }
                 }
               ]
@@ -62,11 +62,11 @@
                 {
                   "i128": {
                     "hi": 0,
-                    "lo": 25000
+                    "lo": 35000
                   }
                 },
                 {
-                  "u64": 100
+                  "u64": 60
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
@@ -93,13 +93,12 @@
         }
       ]
     ],
-    [],
     []
   ],
   "ledger": {
     "protocol_version": 21,
     "sequence_number": 0,
-    "timestamp": 100,
+    "timestamp": 65,
     "network_id": "0000000000000000000000000000000000000000000000000000000000000000",
     "base_reserve": 0,
     "min_persistent_entry_ttl": 4096,
@@ -227,7 +226,7 @@
                                         "val": {
                                           "i128": {
                                             "hi": 0,
-                                            "lo": 25000
+                                            "lo": 35000
                                           }
                                         }
                                       },
@@ -244,7 +243,7 @@
                                           "symbol": "timestamp"
                                         },
                                         "val": {
-                                          "u64": 100
+                                          "u64": 65
                                         }
                                       }
                                     ]
@@ -267,7 +266,7 @@
                               "val": {
                                 "i128": {
                                   "hi": 0,
-                                  "lo": 75000
+                                  "lo": 0
                                 }
                               }
                             },
@@ -286,7 +285,7 @@
                               "val": {
                                 "i128": {
                                   "hi": 0,
-                                  "lo": 100000
+                                  "lo": 35000
                                 }
                               }
                             }
@@ -316,7 +315,7 @@
                                   "val": {
                                     "i128": {
                                       "hi": 0,
-                                      "lo": 25000
+                                      "lo": 35000
                                     }
                                   }
                                 },
@@ -345,7 +344,7 @@
                                     "symbol": "released_at"
                                   },
                                   "val": {
-                                    "u64": 100
+                                    "u64": 65
                                   }
                                 },
                                 {
@@ -376,7 +375,7 @@
                                   "val": {
                                     "i128": {
                                       "hi": 0,
-                                      "lo": 25000
+                                      "lo": 35000
                                     }
                                   }
                                 },
@@ -393,7 +392,7 @@
                                     "symbol": "release_timestamp"
                                   },
                                   "val": {
-                                    "u64": 100
+                                    "u64": 60
                                   }
                                 },
                                 {
@@ -409,7 +408,7 @@
                                     "symbol": "released_at"
                                   },
                                   "val": {
-                                    "u64": 100
+                                    "u64": 65
                                   }
                                 },
                                 {
@@ -586,7 +585,7 @@
                       "val": {
                         "i128": {
                           "hi": 0,
-                          "lo": 75000
+                          "lo": 0
                         }
                       }
                     },
@@ -659,7 +658,7 @@
                       "val": {
                         "i128": {
                           "hi": 0,
-                          "lo": 25000
+                          "lo": 35000
                         }
                       }
                     },
@@ -1148,7 +1147,7 @@
                 {
                   "i128": {
                     "hi": 0,
-                    "lo": 100000
+                    "lo": 35000
                   }
                 }
               ]
@@ -1182,7 +1181,7 @@
             "data": {
               "i128": {
                 "hi": 0,
-                "lo": 100000
+                "lo": 35000
               }
             }
           }
@@ -1232,7 +1231,7 @@
             "data": {
               "i128": {
                 "hi": 0,
-                "lo": 100000
+                "lo": 35000
               }
             }
           }
@@ -1261,7 +1260,7 @@
                   "val": {
                     "i128": {
                       "hi": 0,
-                      "lo": 100000
+                      "lo": 35000
                     }
                   }
                 },
@@ -1280,7 +1279,7 @@
                   "val": {
                     "i128": {
                       "hi": 0,
-                      "lo": 100000
+                      "lo": 35000
                     }
                   }
                 },
@@ -1347,7 +1346,7 @@
                   "val": {
                     "i128": {
                       "hi": 0,
-                      "lo": 100000
+                      "lo": 35000
                     }
                   }
                 },
@@ -1366,7 +1365,7 @@
                   "val": {
                     "i128": {
                       "hi": 0,
-                      "lo": 100000
+                      "lo": 35000
                     }
                   }
                 }
@@ -1400,11 +1399,11 @@
                 {
                   "i128": {
                     "hi": 0,
-                    "lo": 25000
+                    "lo": 35000
                   }
                 },
                 {
-                  "u64": 100
+                  "u64": 60
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
@@ -1440,7 +1439,7 @@
                   "val": {
                     "i128": {
                       "hi": 0,
-                      "lo": 25000
+                      "lo": 35000
                     }
                   }
                 },
@@ -1457,7 +1456,7 @@
                     "symbol": "release_timestamp"
                   },
                   "val": {
-                    "u64": 100
+                    "u64": 60
                   }
                 },
                 {
@@ -1548,7 +1547,7 @@
                 {
                   "i128": {
                     "hi": 0,
-                    "lo": 25000
+                    "lo": 35000
                   }
                 }
               ]
@@ -1582,7 +1581,7 @@
             "data": {
               "i128": {
                 "hi": 0,
-                "lo": 25000
+                "lo": 35000
               }
             }
           }
@@ -1649,7 +1648,7 @@
                 "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
               },
               {
-                "symbol": "get_release_schedules"
+                "symbol": "get_program_release_history"
               }
             ],
             "data": "void"
@@ -1670,7 +1669,7 @@
                 "symbol": "fn_return"
               },
               {
-                "symbol": "get_release_schedules"
+                "symbol": "get_program_release_history"
               }
             ],
             "data": {
@@ -1684,7 +1683,7 @@
                       "val": {
                         "i128": {
                           "hi": 0,
-                          "lo": 25000
+                          "lo": 35000
                         }
                       }
                     },
@@ -1698,18 +1697,14 @@
                     },
                     {
                       "key": {
-                        "symbol": "release_timestamp"
+                        "symbol": "release_type"
                       },
                       "val": {
-                        "u64": 100
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "released"
-                      },
-                      "val": {
-                        "bool": true
+                        "vec": [
+                          {
+                            "symbol": "Automatic"
+                          }
+                        ]
                       }
                     },
                     {
@@ -1717,15 +1712,7 @@
                         "symbol": "released_at"
                       },
                       "val": {
-                        "u64": 100
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "released_by"
-                      },
-                      "val": {
-                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+                        "u64": 65
                       }
                     },
                     {
@@ -1739,58 +1726,6 @@
                   ]
                 }
               ]
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": null,
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_call"
-              },
-              {
-                "bytes": "8011bbf4cdf04e5bc6ac886935b99aa4b2c0cabde133f9d7fb3e656799f0a896"
-              },
-              {
-                "symbol": "balance"
-              }
-            ],
-            "data": {
-              "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "8011bbf4cdf04e5bc6ac886935b99aa4b2c0cabde133f9d7fb3e656799f0a896",
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_return"
-              },
-              {
-                "symbol": "balance"
-              }
-            ],
-            "data": {
-              "i128": {
-                "hi": 0,
-                "lo": 25000
-              }
             }
           }
         }

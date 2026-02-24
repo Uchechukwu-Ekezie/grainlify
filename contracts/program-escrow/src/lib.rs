@@ -167,6 +167,9 @@ mod test_granular_pause;
 #[cfg(any())]
 mod test_lifecycle;
 
+#[cfg(test)]
+mod test_full_lifecycle;
+
 // ── Step 2: Add these public contract functions to the ProgramEscrowContract
 //    impl block (alongside the existing admin functions) ──────────────────
 

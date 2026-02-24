@@ -2716,3 +2716,5 @@ mod escrow_status_transition_tests {
 }
 #[cfg(test)]
 mod test_query_filters;
+#[cfg(test)]
+mod test_status_transitions;

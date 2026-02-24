@@ -92,7 +92,7 @@ jobs:
           source $HOME/.cargo/env
           # Verify WASM files were generated
           echo "Checking for generated WASM files..."
-          wasm_file="../../target/wasm32v1-none/release/bounty_escrow.wasm"
+          wasm_file="$GITHUB_WORKSPACE/contracts/bounty_escrow/target/wasm32v1-none/release/bounty_escrow.wasm"
           if [ ! -f "$wasm_file" ]; then
             echo "Error: WASM file not found"
             echo "Expected: $wasm_file"

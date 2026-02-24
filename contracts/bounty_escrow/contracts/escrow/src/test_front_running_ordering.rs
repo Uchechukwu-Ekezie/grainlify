@@ -1,19 +1,17 @@
-#![cfg(test)]
-
 use super::*;
-use soroban_sdk::{
-    testutils::{Address as _, Ledger},
-    token, Address, Env,
-};
+use soroban_sdk::{testutils::Address as _, token, Address, Env};
 
 fn create_token_contract<'a>(
     env: &Env,
     admin: &Address,
 ) -> (token::Client<'a>, token::StellarAssetClient<'a>) {
-    let contract_address = env.register_stellar_asset_contract(admin.clone());
+    // register_stellar_asset_contract_v2 returns StellarAssetContract
+    let contract = env.register_stellar_asset_contract_v2(admin.clone());
+    // Get the Address from the contract object
+    let addr = contract.address();
     (
-        token::Client::new(env, &contract_address),
-        token::StellarAssetClient::new(env, &contract_address),
+        token::Client::new(env, &addr),
+        token::StellarAssetClient::new(env, &addr),
     )
 }
 

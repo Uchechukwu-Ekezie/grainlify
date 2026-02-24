@@ -1871,3 +1871,175 @@ fn test_combined_recipient_and_amount_filter_manual() {
     assert_eq!(large_count, 1);
     assert_eq!(large_amount, 200_000);
 }
+
+// =============================================================================
+// TIME-BASED RELEASE SCHEDULE — EDGE CASE TESTS
+// Issue #459: extend coverage for timestamp boundary, idempotency, history
+// =============================================================================
+
+/// Calling trigger_program_releases a second time must NOT re-release
+/// schedules that were already processed in the first call.
+#[test]
+fn test_trigger_releases_idempotent_already_released_skipped() {
+    let env = Env::default();
+    let (client, _admin, token_client, _token_admin) = setup_program(&env, 50_000);
+    let recipient = Address::generate(&env);
+    let now = env.ledger().timestamp();
+
+    client.create_program_release_schedule(&50_000, &(now + 10), &recipient);
+
+    env.ledger().set_timestamp(now + 10);
+
+    // First trigger — should release
+    let first = client.trigger_program_releases();
+    assert_eq!(first, 1);
+    assert_eq!(token_client.balance(&recipient), 50_000);
+    assert_eq!(client.get_remaining_balance(), 0);
+
+    // Second trigger — already released, must return 0 and not double-pay
+    let second = client.trigger_program_releases();
+    assert_eq!(second, 0);
+    assert_eq!(token_client.balance(&recipient), 50_000); // unchanged
+    assert_eq!(client.get_remaining_balance(), 0);        // unchanged
+}
+
+/// Partial trigger: schedules due at T are released; schedules due at T+N
+/// are skipped. Balance must reflect only the released portion. A second
+/// trigger at T+N must release the remaining ones without touching history.
+#[test]
+fn test_trigger_releases_partial_then_remainder_balance_consistency() {
+    let env = Env::default();
+    let (client, _admin, token_client, _token_admin) = setup_program(&env, 90_000);
+
+    let r1 = Address::generate(&env);
+    let r2 = Address::generate(&env);
+    let r3 = Address::generate(&env);
+    let now = env.ledger().timestamp();
+
+    client.create_program_release_schedule(&20_000, &(now + 50), &r1);
+    client.create_program_release_schedule(&30_000, &(now + 50), &r2);
+    client.create_program_release_schedule(&40_000, &(now + 150), &r3);
+
+    // Advance to first window — r1 and r2 become due, r3 is not yet
+    env.ledger().set_timestamp(now + 50);
+    let released_first = client.trigger_program_releases();
+    assert_eq!(released_first, 2);
+    assert_eq!(token_client.balance(&r1), 20_000);
+    assert_eq!(token_client.balance(&r2), 30_000);
+    assert_eq!(token_client.balance(&r3), 0);
+    assert_eq!(client.get_remaining_balance(), 40_000);
+
+    // Advance to second window — only r3 should release
+    env.ledger().set_timestamp(now + 150);
+    let released_second = client.trigger_program_releases();
+    assert_eq!(released_second, 1);
+    assert_eq!(token_client.balance(&r3), 40_000);
+    assert_eq!(client.get_remaining_balance(), 0);
+
+    // All three entries must be in release history
+    let history = client.get_program_release_history();
+    assert_eq!(history.len(), 3);
+}
+
+/// release_prog_schedule_automatic called at the exact release_timestamp
+/// boundary must succeed and transfer funds.
+#[test]
+fn test_automatic_release_fn_exact_timestamp_boundary_succeeds() {
+    let env = Env::default();
+    let (client, _admin, token_client, _token_admin) = setup_program(&env, 25_000);
+    let recipient = Address::generate(&env);
+    let now = env.ledger().timestamp();
+    let target_ts = now + 100;
+
+    let schedule = client.create_program_release_schedule(&25_000, &target_ts, &recipient);
+
+    // Set ledger time to exactly the release timestamp
+    env.ledger().set_timestamp(target_ts);
+    client.release_prog_schedule_automatic(&schedule.schedule_id);
+
+    assert_eq!(token_client.balance(&recipient), 25_000);
+    assert_eq!(client.get_remaining_balance(), 0);
+
+    let schedules = client.get_release_schedules();
+    assert!(schedules.get(0).unwrap().released);
+}
+
+/// release_prog_schedule_automatic called one second BEFORE release_timestamp
+/// must panic with "Not yet due".
+#[test]
+#[should_panic(expected = "Not yet due")]
+fn test_automatic_release_fn_just_before_timestamp_panics() {
+    let env = Env::default();
+    let (client, _admin, _token_client, _token_admin) = setup_program(&env, 25_000);
+    let recipient = Address::generate(&env);
+    let now = env.ledger().timestamp();
+    let target_ts = now + 100;
+
+    let schedule = client.create_program_release_schedule(&25_000, &target_ts, &recipient);
+
+    // Set ledger to one second before the scheduled time
+    env.ledger().set_timestamp(target_ts - 1);
+    client.release_prog_schedule_automatic(&schedule.schedule_id); // must panic
+}
+
+/// After a time-triggered release, the release history entry must contain
+/// the correct schedule_id, recipient, amount, and release_type (Automatic).
+#[test]
+fn test_release_history_entry_fields_correct_after_trigger() {
+    let env = Env::default();
+    let (client, _admin, _token_client, _token_admin) = setup_program(&env, 35_000);
+    let recipient = Address::generate(&env);
+    let now = env.ledger().timestamp();
+    let target_ts = now + 60;
+
+    let schedule = client.create_program_release_schedule(&35_000, &target_ts, &recipient);
+
+    env.ledger().set_timestamp(target_ts + 5);
+    client.trigger_program_releases();
+
+    let history = client.get_program_release_history();
+    assert_eq!(history.len(), 1);
+
+    let entry = history.get(0).unwrap();
+    assert_eq!(entry.schedule_id, schedule.schedule_id);
+    assert_eq!(entry.recipient, recipient);
+    assert_eq!(entry.amount, 35_000);
+    // released_at must be the ledger timestamp at trigger time
+    assert_eq!(entry.released_at, target_ts + 5);
+    // release_type must be Automatic
+    assert!(matches!(entry.release_type, ReleaseType::Automatic));
+}
+
+/// Overlapping schedules at the exact same timestamp: all of them must be
+/// released in a single trigger call and the total balance deducted correctly.
+#[test]
+fn test_overlapping_exact_same_timestamp_all_released_at_once() {
+    let env = Env::default();
+    let (client, _admin, token_client, _token_admin) = setup_program(&env, 60_000);
+
+    let r1 = Address::generate(&env);
+    let r2 = Address::generate(&env);
+    let r3 = Address::generate(&env);
+    let now = env.ledger().timestamp();
+    let shared_ts = now + 100;
+
+    client.create_program_release_schedule(&10_000, &shared_ts, &r1);
+    client.create_program_release_schedule(&20_000, &shared_ts, &r2);
+    client.create_program_release_schedule(&30_000, &shared_ts, &r3);
+
+    env.ledger().set_timestamp(shared_ts);
+    let released = client.trigger_program_releases();
+
+    assert_eq!(released, 3);
+    assert_eq!(token_client.balance(&r1), 10_000);
+    assert_eq!(token_client.balance(&r2), 20_000);
+    assert_eq!(token_client.balance(&r3), 30_000);
+    assert_eq!(client.get_remaining_balance(), 0);
+
+    // All three must appear as released in schedule list
+    let schedules = client.get_release_schedules();
+    assert_eq!(schedules.len(), 3);
+    for i in 0..schedules.len() {
+        assert!(schedules.get(i).unwrap().released);
+    }
+}

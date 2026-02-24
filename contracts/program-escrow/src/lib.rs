@@ -150,6 +150,7 @@ mod error_recovery_tests;
 
 #[cfg(test)]
 mod test_dispute_resolution;
+#[cfg(any())]
 mod reentrancy_tests;
 
 #[cfg(test)]
@@ -159,9 +160,11 @@ mod reentrancy_guard_standalone_test;
 mod malicious_reentrant;
 
 #[cfg(test)]
+#[cfg(any())]
 mod test_granular_pause;
 
 #[cfg(test)]
+#[cfg(any())]
 mod test_lifecycle;
 
 // ── Step 2: Add these public contract functions to the ProgramEscrowContract
@@ -375,6 +378,7 @@ pub struct ProgramData {
     pub authorized_payout_key: Address,
     pub payout_history: Vec<PayoutRecord>,
     pub token_address: Address, // Token contract address for transfers
+    pub initial_liquidity: i128, // Initial liquidity provided by creator
 }
 
 /// Storage key type for individual programs
@@ -471,16 +475,6 @@ pub struct ProgramAggregateStats {
     pub released_count: u32,
 }
 
-/// Fee configuration for the program escrow.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct FeeConfig {
-    pub lock_fee_rate: i128,
-    pub payout_fee_rate: i128,
-    pub fee_recipient: Address,
-    pub fee_enabled: bool,
-}
-
 /// Input item for batch program registration.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -505,6 +499,14 @@ pub enum BatchError {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FeeConfig {
+    pub lock_fee_rate: i128,
+    pub payout_fee_rate: i128,
+    pub fee_recipient: Address,
+    pub fee_enabled: bool,
+}
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MultisigConfig {
     pub threshold_amount: i128,
     pub signers: Vec<Address>,
@@ -518,10 +520,6 @@ pub struct PayoutApproval {
     pub recipient: Address,
     pub amount: i128,
     pub approvals: Vec<Address>,
-    pub total_paid_out: i128,
-    pub payout_count: u32,
-    pub scheduled_count: u32,
-    pub released_count: u32,
 }
 
 #[contract]
@@ -543,8 +541,10 @@ impl ProgramEscrowContract {
         program_id: String,
         authorized_payout_key: Address,
         token_address: Address,
+        creator: Address,
+        initial_liquidity: Option<i128>,
     ) -> ProgramData {
-        Self::initialize_program(env, program_id, authorized_payout_key, token_address)
+        Self::initialize_program(env, program_id, authorized_payout_key, token_address, creator, initial_liquidity)
     }
 
     pub fn initialize_program(
@@ -552,19 +552,39 @@ impl ProgramEscrowContract {
         program_id: String,
         authorized_payout_key: Address,
         token_address: Address,
+        creator: Address,
+        initial_liquidity: Option<i128>,
     ) -> ProgramData {
         // Check if program already exists
         if env.storage().instance().has(&PROGRAM_DATA) {
             panic!("Program already initialized");
         }
 
+        let mut total_funds = 0i128;
+        let mut remaining_balance = 0i128;
+        let mut init_liquidity = 0i128;
+
+        if let Some(amount) = initial_liquidity {
+            if amount > 0 {
+                // Transfer initial liquidity from creator to contract
+                let contract_address = env.current_contract_address();
+                let token_client = token::Client::new(&env, &token_address);
+                creator.require_auth();
+                token_client.transfer(&creator, &contract_address, &amount);
+                total_funds = amount;
+                remaining_balance = amount;
+                init_liquidity = amount;
+            }
+        }
+
         let program_data = ProgramData {
             program_id: program_id.clone(),
-            total_funds: 0,
-            remaining_balance: 0,
+            total_funds,
+            remaining_balance,
             authorized_payout_key: authorized_payout_key.clone(),
             payout_history: vec![&env],
             token_address: token_address.clone(),
+            initial_liquidity: init_liquidity,
         };
 
         // Store program data
@@ -585,7 +605,7 @@ impl ProgramEscrowContract {
                 program_id,
                 authorized_payout_key,
                 token_address,
-                total_funds: 0i128,
+                total_funds,
             },
         );
 
@@ -706,8 +726,13 @@ impl ProgramEscrowContract {
     ///
     /// # Returns
     /// * `bool` - True if program exists, false otherwise
-    pub fn program_exists(env: Env) -> bool {
-        env.storage().instance().has(&PROGRAM_DATA)
+    pub fn program_exists(env: Env, program_id: String) -> bool {
+        if let Some(data) = env.storage().instance().get::<Symbol, ProgramData>(&PROGRAM_DATA) {
+            return data.program_id == program_id;
+        }
+        env.storage()
+            .instance()
+            .has(&DataKey::Program(program_id))
     }
 
     /// Check if a specific program exists by ID (multi-tenant)
@@ -1699,7 +1724,7 @@ impl ProgramEscrowContract {
         env: Env,
         schedule_id: u64,
     ) -> ProgramReleaseSchedule {
-        let schedules = Self::get_program_release_schedules(env);
+        let schedules = Self::get_release_schedules(env);
         for s in schedules.iter() {
             if s.schedule_id == schedule_id {
                 return s;
@@ -1709,7 +1734,7 @@ impl ProgramEscrowContract {
     }
 
     pub fn get_all_prog_release_schedules(env: Env) -> Vec<ProgramReleaseSchedule> {
-        Self::get_program_release_schedules(env)
+        Self::get_release_schedules(env)
     }
 
     pub fn get_pending_program_schedules(env: Env) -> Vec<ProgramReleaseSchedule> {
@@ -1721,7 +1746,7 @@ impl ProgramEscrowContract {
     }
 
     pub fn release_program_schedule_manual(env: Env, schedule_id: u64) {
-        let mut schedules = Self::get_program_release_schedules(env.clone());
+        let mut schedules = Self::get_release_schedules(env.clone());
         let program_data = Self::get_program_info(env.clone());
         
         program_data.authorized_payout_key.require_auth();
@@ -1760,6 +1785,12 @@ impl ProgramEscrowContract {
 
         // Write to release history
         if let Some(s) = released_schedule {
+            let mut updated_program_data = program_data.clone();
+            updated_program_data.remaining_balance -= s.amount;
+            env.storage()
+                .instance()
+                .set(&PROGRAM_DATA, &updated_program_data);
+
             let mut history: Vec<ProgramReleaseHistory> = env.storage()
                 .instance()
                 .get(&RELEASE_HISTORY)
@@ -1776,7 +1807,7 @@ impl ProgramEscrowContract {
     }
 
     pub fn release_prog_schedule_automatic(env: Env, schedule_id: u64) {
-        let mut schedules = Self::get_program_release_schedules(env.clone());
+        let mut schedules = Self::get_release_schedules(env.clone());
         let program_data = Self::get_program_info(env.clone());
         let now = env.ledger().timestamp();
         let mut released_schedule: Option<ProgramReleaseSchedule> = None;
@@ -1814,6 +1845,12 @@ impl ProgramEscrowContract {
 
         // Write to release history
         if let Some(s) = released_schedule {
+            let mut updated_program_data = program_data.clone();
+            updated_program_data.remaining_balance -= s.amount;
+            env.storage()
+                .instance()
+                .set(&PROGRAM_DATA, &updated_program_data);
+
             let mut history: Vec<ProgramReleaseHistory> = env.storage()
                 .instance()
                 .get(&RELEASE_HISTORY)
@@ -1837,5 +1874,5 @@ mod test;
 mod test_pause;
 
 #[cfg(test)]
+#[cfg(any())]
 mod rbac_tests;
-

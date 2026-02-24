@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use super::*;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -30,7 +28,7 @@ struct Setup {
     env: Env,
     depositor: Address,
     contributor: Address,
-    token: token::Client<'static>,
+    _token: token::Client<'static>, // Added underscore to silence 'never read' warning
     token_admin: token::StellarAssetClient<'static>,
     escrow: BountyEscrowContractClient<'static>,
 }
@@ -50,13 +48,12 @@ impl Setup {
             env,
             depositor,
             contributor,
-            token,
+            _token: token, // Updated field name
             token_admin,
             escrow,
         }
     }
 }
-
 //  status filter tests
 
 #[test]
@@ -192,7 +189,7 @@ fn test_query_by_amount_range_returns_matching_escrows() {
     assert_eq!(results.len(), 2);
     for i in 0..results.len() {
         let amt = results.get(i).unwrap().escrow.amount;
-        assert!(amt >= 400 && amt <= 1100);
+        assert!((400..=1100).contains(&amt));
     }
 }
 

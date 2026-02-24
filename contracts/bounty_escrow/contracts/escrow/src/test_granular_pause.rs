@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 //! # Granular Pause Per-Operation Tests — Bounty Escrow
 //!
 //! Tests every combination of pause flags (lock, release, refund) for the

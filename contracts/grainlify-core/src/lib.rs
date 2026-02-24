@@ -1579,6 +1579,7 @@ mod test {
         assert_eq!(state.to_version, 3);
     }
 
-    #[cfg(test)]
-    mod upgrade_rollback_tests;
 }
+
+#[cfg(test)]
+mod migration_hook_tests;

@@ -1,6 +1,9 @@
 #![no_std]
 use soroban_sdk::{contract, contracterror, contractimpl, contracttype, token, Address, Env, Symbol};
 
+extern crate grainlify_core;
+use grainlify_core::nonce;
+
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
@@ -12,6 +15,7 @@ pub enum Error {
     FundsNotLocked = 5,
     DeadlineNotPassed = 6,
     Unauthorized = 7,
+    InvalidNonce = 8,
 }
 
 #[contracttype]
@@ -98,13 +102,18 @@ impl BountyEscrowContract {
 
     /// Release funds to the contributor.
     /// Only the admin (backend) can authorize this.
-    pub fn release_funds(env: Env, bounty_id: u64, contributor: Address) -> Result<(), Error> {
+    /// Requires nonce to prevent replay attacks.
+    pub fn release_funds(env: Env, bounty_id: u64, contributor: Address, nonce: u64) -> Result<(), Error> {
         if !env.storage().instance().has(&DataKey::Admin) {
             return Err(Error::NotInitialized);
         }
 
         let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         admin.require_auth();
+        
+        // Validate and increment nonce to prevent replay
+        nonce::validate_and_increment_nonce(&env, &admin, nonce)
+            .map_err(|_| Error::InvalidNonce)?;
 
         if !env.storage().persistent().has(&DataKey::Escrow(bounty_id)) {
             return Err(Error::BountyNotFound);
@@ -190,4 +199,12 @@ impl BountyEscrowContract {
         let client = token::Client::new(&env, &token_addr);
         Ok(client.balance(&env.current_contract_address()))
     }
+    
+    /// Get current nonce for a signer (for replay protection)
+    pub fn get_nonce(env: Env, signer: Address) -> u64 {
+        nonce::get_nonce(&env, &signer)
+    }
 }
+
+#[cfg(test)]
+mod test;

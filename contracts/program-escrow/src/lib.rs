@@ -4,14 +4,17 @@ use soroban_sdk::{
     token,
 };
 
+extern crate grainlify_core;
+use grainlify_core::nonce;
+
 // Event types
-const PROGRAM_INITIALIZED: Symbol = symbol_short!("ProgramInit");
-const FUNDS_LOCKED: Symbol = symbol_short!("FundsLocked");
-const BATCH_PAYOUT: Symbol = symbol_short!("BatchPayout");
+const PROGRAM_INITIALIZED: Symbol = symbol_short!("InitProg");
+const FUNDS_LOCKED: Symbol = symbol_short!("Locked");
+const BATCH_PAYOUT: Symbol = symbol_short!("BatchPay");
 const PAYOUT: Symbol = symbol_short!("Payout");
 
 // Storage keys
-const PROGRAM_DATA: Symbol = symbol_short!("ProgramData");
+const PROGRAM_DATA: Symbol = symbol_short!("ProgData");
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -57,7 +60,6 @@ impl ProgramEscrowContract {
             panic!("Program already initialized");
         }
 
-        let contract_address = env.current_contract_address();
         let program_data = ProgramData {
             program_id: program_id.clone(),
             total_funds: 0,
@@ -122,6 +124,7 @@ impl ProgramEscrowContract {
     /// # Arguments
     /// * `recipients` - Vector of recipient addresses
     /// * `amounts` - Vector of amounts (must match recipients length)
+    /// * `nonce` - Nonce for replay protection
     /// 
     /// # Returns
     /// Updated ProgramData after payouts
@@ -129,6 +132,7 @@ impl ProgramEscrowContract {
         env: Env,
         recipients: Vec<Address>,
         amounts: Vec<i128>,
+        nonce: u64,
     ) -> ProgramData {
         // Verify authorization
         let program_data: ProgramData = env
@@ -137,10 +141,11 @@ impl ProgramEscrowContract {
             .get(&PROGRAM_DATA)
             .unwrap_or_else(|| panic!("Program not initialized"));
 
-        let caller = env.invoker();
-        if caller != program_data.authorized_payout_key {
-            panic!("Unauthorized: only authorized payout key can trigger payouts");
-        }
+        program_data.authorized_payout_key.require_auth();
+        
+        // Validate and increment nonce to prevent replay
+        nonce::validate_and_increment_nonce(&env, &program_data.authorized_payout_key, nonce)
+            .unwrap_or_else(|_| panic!("Invalid nonce"));
 
         // Validate input lengths match
         if recipients.len() != amounts.len() {
@@ -154,11 +159,11 @@ impl ProgramEscrowContract {
         // Calculate total payout amount
         let mut total_payout: i128 = 0;
         for amount in amounts.iter() {
-            if *amount <= 0 {
+            if amount <= 0 {
                 panic!("All amounts must be greater than zero");
             }
             total_payout = total_payout
-                .checked_add(*amount)
+                .checked_add(amount)
                 .unwrap_or_else(|| panic!("Payout amount overflow"));
         }
 
@@ -175,15 +180,15 @@ impl ProgramEscrowContract {
         let token_client = token::Client::new(&env, &program_data.token_address);
 
         for (i, recipient) in recipients.iter().enumerate() {
-            let amount = amounts.get(i).unwrap();
+            let amount = amounts.get(i as u32).unwrap();
             
             // Transfer funds from contract to recipient
-            token_client.transfer(&contract_address, recipient, amount);
+            token_client.transfer(&contract_address, &recipient, &amount);
 
             // Record payout
             let payout_record = PayoutRecord {
                 recipient: recipient.clone(),
-                amount: *amount,
+                amount,
                 timestamp,
             };
             updated_history.push_back(payout_record);
@@ -216,10 +221,11 @@ impl ProgramEscrowContract {
     /// # Arguments
     /// * `recipient` - Address of the recipient
     /// * `amount` - Amount to transfer
+    /// * `nonce` - Nonce for replay protection
     /// 
     /// # Returns
     /// Updated ProgramData after payout
-    pub fn single_payout(env: Env, recipient: Address, amount: i128) -> ProgramData {
+    pub fn single_payout(env: Env, recipient: Address, amount: i128, nonce: u64) -> ProgramData {
         // Verify authorization
         let program_data: ProgramData = env
             .storage()
@@ -227,10 +233,11 @@ impl ProgramEscrowContract {
             .get(&PROGRAM_DATA)
             .unwrap_or_else(|| panic!("Program not initialized"));
 
-        let caller = env.invoker();
-        if caller != program_data.authorized_payout_key {
-            panic!("Unauthorized: only authorized payout key can trigger payouts");
-        }
+        program_data.authorized_payout_key.require_auth();
+        
+        // Validate and increment nonce to prevent replay
+        nonce::validate_and_increment_nonce(&env, &program_data.authorized_payout_key, nonce)
+            .unwrap_or_else(|_| panic!("Invalid nonce"));
 
         // Validate amount
         if amount <= 0 {
@@ -304,6 +311,17 @@ impl ProgramEscrowContract {
             .unwrap_or_else(|| panic!("Program not initialized"));
 
         program_data.remaining_balance
+    }
+    
+    /// Get current nonce for a signer (for replay protection)
+    /// 
+    /// # Arguments
+    /// * `signer` - Address of the signer
+    /// 
+    /// # Returns
+    /// Current nonce value
+    pub fn get_nonce(env: Env, signer: Address) -> u64 {
+        nonce::get_nonce(&env, &signer)
     }
 }
 

@@ -193,6 +193,7 @@ dependencies = [
 name = "bounty-escrow"
 version = "0.0.0"
 dependencies = [
+ "grainlify-core",
  "soroban-sdk",
 ]
 
@@ -605,6 +606,13 @@ dependencies = [
  "libc",
  "wasi",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "grainlify-core"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
 ]
 
 [[package]]

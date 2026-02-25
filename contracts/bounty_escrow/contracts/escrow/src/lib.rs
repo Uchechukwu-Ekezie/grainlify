@@ -2446,7 +2446,8 @@ impl BountyEscrowContract {
         anti_abuse::get_admin(&env)
     }
 
-    pub fn set_whitelist(
+    /// Set whitelist status for an address (admin only). Named to avoid SDK client method conflict.
+    pub fn set_whitelist_entry(
         env: Env,
         whitelisted_address: Address,
         whitelisted: bool,

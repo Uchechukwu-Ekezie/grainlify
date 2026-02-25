@@ -150,6 +150,9 @@ mod error_recovery;
 mod reentrancy_guard;
 
 #[cfg(test)]
+mod test_circuit_breaker_audit;
+
+#[cfg(test)]
 mod error_recovery_tests;
 
 #[cfg(test)]

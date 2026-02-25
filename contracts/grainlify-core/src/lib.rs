@@ -1324,6 +1324,13 @@ mod test {
     use super::*;
     use soroban_sdk::{testutils::Address as _, Env};
 
+    // Include end-to-end upgrade and migration tests
+    pub mod e2e_upgrade_migration_tests;
+    pub mod upgrade_rollback_tests;
+
+    // WASM for testing
+    pub const WASM: &[u8] = include_bytes!("../target/wasm32-unknown-unknown/release/grainlify_core.wasm");
+
     #[test]
     fn multisig_init_works() {
         let env = Env::default();
@@ -1883,6 +1890,7 @@ mod test {
         assert_eq!(state.from_version, v_before);
         assert_eq!(state.to_version, 3);
     }
+
     // Export WASM for testing upgrade/rollback scenarios
     // #[cfg(test)]
     // pub const WASM: &[u8] = include_bytes!("../target/wasm32v1-none/release/grainlify_core.wasm");

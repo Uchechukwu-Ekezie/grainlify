@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod test {
-    use crate::error_recovery::{self, CircuitState, CircuitBreakerKey};
+    use crate::error_recovery::{self, CircuitBreakerKey, CircuitState};
     use crate::{ProgramEscrowContract, ProgramEscrowContractClient};
     use soroban_sdk::{testutils::{Address as _, Ledger}, Address, Env, String};
 
@@ -31,8 +31,12 @@ mod test {
         env.as_contract(&client.address, || {
 
         // TAMPER: Force state to Open but leave opened_at as 0
-        env.storage().persistent().set(&CircuitBreakerKey::State, &CircuitState::Open);
-        env.storage().persistent().set(&CircuitBreakerKey::OpenedAt, &0u64);
+        env.storage()
+            .persistent()
+            .set(&CircuitBreakerKey::State, &CircuitState::Open);
+        env.storage()
+            .persistent()
+            .set(&CircuitBreakerKey::OpenedAt, &0u64);
 
         // Verify that verification detects the inconsistency
         assert!(!error_recovery::verify_circuit_invariants(&env), "Should fail when Open state has no timestamp");
@@ -46,8 +50,12 @@ mod test {
         env.as_contract(&client.address, || {
 
         // TAMPER: Force failure_count to 10 (threshold is 3) but keep state Closed
-        env.storage().persistent().set(&CircuitBreakerKey::FailureCount, &10u32);
-        env.storage().persistent().set(&CircuitBreakerKey::State, &CircuitState::Closed);
+        env.storage()
+            .persistent()
+            .set(&CircuitBreakerKey::FailureCount, &10u32);
+        env.storage()
+            .persistent()
+            .set(&CircuitBreakerKey::State, &CircuitState::Closed);
 
         // Verify that verification detects the inconsistency
         assert!(!error_recovery::verify_circuit_invariants(&env), "Should fail when Closed state exceeds failure threshold");
@@ -61,8 +69,12 @@ mod test {
         env.as_contract(&client.address, || {
 
         // TAMPER: Force success_count to 5 (threshold is 1) but keep state HalfOpen
-        env.storage().persistent().set(&CircuitBreakerKey::State, &CircuitState::HalfOpen);
-        env.storage().persistent().set(&CircuitBreakerKey::SuccessCount, &5u32);
+        env.storage()
+            .persistent()
+            .set(&CircuitBreakerKey::State, &CircuitState::HalfOpen);
+        env.storage()
+            .persistent()
+            .set(&CircuitBreakerKey::SuccessCount, &5u32);
 
         // Verify that verification detects the inconsistency
         assert!(!error_recovery::verify_circuit_invariants(&env), "Should fail when HalfOpen state exceeds success threshold");

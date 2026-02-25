@@ -3,7 +3,7 @@
 use super::*;
 use soroban_sdk::{
     testutils::{Address as _, Events, Ledger},
-    token, Address, Env, String, Symbol, TryIntoVal, IntoVal
+    token, Address, Env, IntoVal, String, Symbol, TryIntoVal,
 };
 
 fn create_token_contract<'a>(env: &Env, admin: &Address) -> token::Client<'a> {
@@ -16,7 +16,7 @@ fn setup_with_admin<'a>(env: &Env) -> (ProgramEscrowContractClient<'a>, Address)
     let contract_id = env.register_contract(None, ProgramEscrowContract);
     let client = ProgramEscrowContractClient::new(env, &contract_id);
     let admin = Address::generate(env);
-    
+
     // Explicitly do not mock auths globally here so we can test auth failures
     client.mock_auths(&[]).initialize_contract(&admin);
     (client, admin)
@@ -32,10 +32,10 @@ fn setup_program_with_admin<'a>(
 ) {
     let (client, admin) = setup_with_admin(env);
     let payout_key = Address::generate(env);
-    
+
     let token_admin = Address::generate(env);
     let token_client = create_token_contract(env, &token_admin);
-    
+
     env.mock_all_auths();
     let program_id = String::from_str(env, "test-prog");
     client.init_program(&program_id, &payout_key, &token_client.address, &admin, &None, &None);
@@ -175,11 +175,11 @@ fn test_batch_payout_paused() {
 #[should_panic(expected = "Already initialized")]
 fn test_double_initialize_contract() {
     let env = Env::default();
-    
+
     let contract_id = env.register_contract(None, ProgramEscrowContract);
     let client = ProgramEscrowContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
-    
+
     // Explicit mock to allow init
     env.mock_all_auths();
     client.initialize_contract(&admin);
@@ -207,7 +207,7 @@ fn test_set_paused_before_initialize() {
 fn test_pause_by_non_admin_fails() {
     let env = Env::default();
     let (contract, _admin) = setup_with_admin(&env);
-    
+
     // Not calling mock_all_auths to verify admin tracking
     contract.set_paused(&Some(true), &Some(true), &Some(true), &None);
 }
@@ -226,11 +226,11 @@ fn test_set_paused_emits_events() {
 
     let events = env.events().all();
     let emitted = events.iter().last().unwrap();
-    
+
     let topics = emitted.1;
     let topic_0: Symbol = topics.get(0).unwrap().into_val(&env);
     assert_eq!(topic_0, Symbol::new(&env, "PauseSt"));
-    
+
     let data: (Symbol, bool, Address, Option<String>, u64) = emitted.2.try_into_val(&env).unwrap();
     assert_eq!(data.0, Symbol::new(&env, "lock"));
     assert_eq!(data.1, true);
@@ -247,10 +247,10 @@ fn test_operations_resume_after_unpause() {
 
     // Pause
     contract.set_paused(&Some(true), &None, &None, &None);
-    
+
     // Unpause
     contract.set_paused(&Some(false), &None, &None, &None);
-    
+
     // Should succeed now
     contract.lock_program_funds(&1000);
 }
@@ -260,7 +260,7 @@ fn test_operations_resume_after_unpause() {
 fn test_emergency_withdraw_non_admin_fails() {
     let env = Env::default();
     let (contract, _admin) = setup_with_admin(&env);
-    
+
     let target = Address::generate(&env);
     contract.emergency_withdraw(&target);
 }
@@ -272,7 +272,7 @@ fn test_emergency_withdraw_unpaused_fails() {
     env.mock_all_auths();
     let (contract, _admin) = setup_with_admin(&env);
     let target = Address::generate(&env);
-    
+
     contract.emergency_withdraw(&target);
 }
 
@@ -282,24 +282,25 @@ fn test_emergency_withdraw_succeeds() {
     env.mock_all_auths();
     let (contract, admin, _payout_key, token_client) = setup_program_with_admin(&env);
     let target = Address::generate(&env);
-    
+
     // We need the token admin to mint tokens directly to the contract.
     // In test_pause.rs, token_admin is generated internally, so let's just make a new token and re-init
     // Actually, `setup_program_with_admin` doesn't expose `token_admin`.
     // We can just use the StellarAssetClient from the token client's address.
-    let token_admin_client = soroban_sdk::token::StellarAssetClient::new(&env, &token_client.address);
+    let token_admin_client =
+        soroban_sdk::token::StellarAssetClient::new(&env, &token_client.address);
     token_admin_client.mint(&admin, &1000);
     token_client.transfer(&admin, &contract.address, &500);
 
     // Lock some funds to get balance in contract state
     contract.lock_program_funds(&500);
     assert_eq!(token_client.balance(&contract.address), 500);
-    
+
     let reason = soroban_sdk::String::from_str(&env, "Hacked");
     contract.set_paused(&Some(true), &None, &None, &Some(reason));
-    
+
     contract.emergency_withdraw(&target);
-    
+
     assert_eq!(token_client.balance(&contract.address), 0);
     assert_eq!(token_client.balance(&target), 500);
 }
@@ -313,14 +314,21 @@ fn test_emergency_withdraw_succeeds() {
 
 /// Helper: Setup RBAC environment with admin and operator roles
 /// Does NOT mock all auths - allows auth checks to work
-fn setup_rbac_program_env_strict<'a>(env: &Env) -> (Address, Address, token::Client<'a>, ProgramEscrowContractClient<'a>) {
+fn setup_rbac_program_env_strict<'a>(
+    env: &Env,
+) -> (
+    Address,
+    Address,
+    token::Client<'a>,
+    ProgramEscrowContractClient<'a>,
+) {
     let admin = Address::generate(env);
     let operator = Address::generate(env);
     let token_admin = Address::generate(env);
 
     let contract_id = env.register_contract(None, ProgramEscrowContract);
     let contract_client = ProgramEscrowContractClient::new(env, &contract_id);
-    
+
     let token_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
     let token_address = token_contract.address();
     let token_client = token::Client::new(env, &token_address);
@@ -328,10 +336,10 @@ fn setup_rbac_program_env_strict<'a>(env: &Env) -> (Address, Address, token::Cli
 
     // Temporarily allow auths for setup
     env.mock_all_auths();
-    
+
     // Initialize contract with admin
     contract_client.initialize_contract(&admin);
-    
+
     // Initialize program with operator as payout_key
     let program_id = String::from_str(env, "rbac-program");
     contract_client.init_program(&program_id, &operator, &token_address, &admin, &None, &None);
@@ -349,24 +357,31 @@ fn setup_rbac_program_env_strict<'a>(env: &Env) -> (Address, Address, token::Cli
 }
 
 /// Helper: Setup RBAC environment with all-auths mocked (for tests that need it)
-fn setup_rbac_program_env<'a>(env: &Env) -> (Address, Address, token::Client<'a>, ProgramEscrowContractClient<'a>) {
+fn setup_rbac_program_env<'a>(
+    env: &Env,
+) -> (
+    Address,
+    Address,
+    token::Client<'a>,
+    ProgramEscrowContractClient<'a>,
+) {
     let admin = Address::generate(env);
     let operator = Address::generate(env);
     let token_admin = Address::generate(env);
 
     let contract_id = env.register_contract(None, ProgramEscrowContract);
     let contract_client = ProgramEscrowContractClient::new(env, &contract_id);
-    
+
     let token_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
     let token_address = token_contract.address();
     let token_client = token::Client::new(env, &token_address);
     let token_admin_client = token::StellarAssetClient::new(env, &token_address);
 
     env.mock_all_auths();
-    
+
     // Initialize contract with admin
     contract_client.initialize_contract(&admin);
-    
+
     // Initialize program with operator as payout_key
     let program_id = String::from_str(env, "rbac-program");
     contract_client.init_program(&program_id, &operator, &token_address, &admin, &None, &None);
@@ -410,7 +425,7 @@ fn test_rbac_operator_cannot_emergency_withdraw() {
 
     // Auth checks should now reject unauthorized calls
     contract_client.set_paused(&Some(true), &None, &None, &None);
-    
+
     // Attempting to call emergency_withdraw without admin auth should fail
     contract_client.emergency_withdraw(&target);
 }
@@ -452,7 +467,7 @@ fn test_rbac_emergency_withdraw_emits_event() {
     let topics = last_event.1;
     let topic_0: Symbol = topics.get(0).unwrap().into_val(&env);
     assert_eq!(topic_0, Symbol::new(&env, "em_wtd"));
-    
+
     // Verify event data: (admin, target, balance, timestamp)
     let data: (Address, Address, i128, u64) = last_event.2.try_into_val(&env).unwrap();
     assert_eq!(data.0, admin);
@@ -472,9 +487,9 @@ fn test_rbac_emergency_withdraw_on_empty_contract_is_safe() {
 
     contract_client.set_paused(&Some(true), &None, &None, &None);
     contract_client.emergency_withdraw(&target); // drains 500
-    
+
     assert_eq!(token_client.balance(&contract_client.address), 0);
-    
+
     contract_client.emergency_withdraw(&target); // balance = 0, should NOT panic
 
     assert_eq!(token_client.balance(&contract_client.address), 0);
@@ -493,7 +508,10 @@ fn test_rbac_pause_state_preserved_after_emergency_withdraw() {
     contract_client.emergency_withdraw(&target);
 
     let flags = contract_client.get_pause_flags();
-    assert!(flags.lock_paused, "lock_paused should still be true after emergency_withdraw");
+    assert!(
+        flags.lock_paused,
+        "lock_paused should still be true after emergency_withdraw"
+    );
 }
 
 /// Partial pause: only release paused (not lock) — emergency_withdraw still requires lock_paused
@@ -508,7 +526,7 @@ fn test_rbac_emergency_withdraw_requires_lock_paused_not_release_paused() {
 
     // Only pause release, not lock
     contract_client.set_paused(&None, &Some(true), &None, &None);
-    
+
     contract_client.emergency_withdraw(&target);
 }
 
@@ -524,7 +542,7 @@ fn test_rbac_emergency_withdraw_requires_lock_paused_not_refund_paused() {
 
     // Only pause refund, not lock
     contract_client.set_paused(&None, &None, &Some(true), &None);
-    
+
     contract_client.emergency_withdraw(&target);
 }
 
@@ -540,7 +558,7 @@ fn test_rbac_emergency_withdraw_drains_all_funds() {
 
     let contract_id = env.register_contract(None, ProgramEscrowContract);
     let contract_client = ProgramEscrowContractClient::new(&env, &contract_id);
-    
+
     let token_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
     let token_address = token_contract.address();
     let token_client = token::Client::new(&env, &token_address);
@@ -548,7 +566,7 @@ fn test_rbac_emergency_withdraw_drains_all_funds() {
 
     // Initialize contract with admin
     contract_client.initialize_contract(&admin);
-    
+
     // Initialize multiple programs
     // NOTE: Contract currently only supports one program per instance
     let program_id_1 = String::from_str(&env, "prog-1");
@@ -563,16 +581,22 @@ fn test_rbac_emergency_withdraw_drains_all_funds() {
 
     // Transfer to contract and lock in each program
     token_client.transfer(&depositor, &contract_client.address, &1500);
-    contract_client.lock_program_funds(&500);  // This locks 500 for the current program context
-    
-    assert!(token_client.balance(&contract_client.address) > 0, "Contract should have balance");
+    contract_client.lock_program_funds(&500); // This locks 500 for the current program context
+
+    assert!(
+        token_client.balance(&contract_client.address) > 0,
+        "Contract should have balance"
+    );
 
     let target = Address::generate(&env);
     contract_client.set_paused(&Some(true), &None, &None, &None);
     contract_client.emergency_withdraw(&target);
 
     assert_eq!(token_client.balance(&contract_client.address), 0);
-    assert!(token_client.balance(&target) > 0, "Target should receive withdrawn funds");
+    assert!(
+        token_client.balance(&target) > 0,
+        "Target should receive withdrawn funds"
+    );
 }
 
 /// After emergency_withdraw, admin can unpause and resume normal operations
@@ -594,7 +618,10 @@ fn test_rbac_after_emergency_withdraw_can_unpause_and_reuse() {
     // Unpause
     contract_client.set_paused(&Some(false), &None, &None, &None);
     let flags = contract_client.get_pause_flags();
-    assert!(!flags.lock_paused, "lock_paused should be false after unpause");
+    assert!(
+        !flags.lock_paused,
+        "lock_paused should be false after unpause"
+    );
 
     // Verify contract can be reused (balance is 0 now but lock should work)
     // We need to mint tokens to the contract first since lock_program_funds doesn't transfer them from caller

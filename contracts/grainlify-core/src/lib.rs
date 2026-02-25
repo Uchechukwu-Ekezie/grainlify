@@ -1573,6 +1573,12 @@ mod test {
         assert_eq!(state.from_version, v_before);
         assert_eq!(state.to_version, 3);
     }
+    // Export WASM for testing upgrade/rollback scenarios
+    #[cfg(test)]
+    pub const WASM: &[u8] = include_bytes!("../target/wasm32v1-none/release/grainlify_core.wasm");
+
+    #[cfg(test)]
+    mod upgrade_rollback_tests;
 }
 
 #[cfg(test)]

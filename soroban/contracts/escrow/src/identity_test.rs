@@ -152,7 +152,7 @@ fn test_is_claim_valid_no_claim() {
 #[test]
 fn test_lock_funds_respects_limits() {
     let env = Env::default();
-    let amount = 10_000i128;
+    let amount = 10_000_0000000i128; // 10,000 tokens (exceeds unverified limit of 100)
     let (client, _contract_id, _admin, depositor, _contributor, _issuer, _token_client) =
         setup_with_identity(&env, amount);
 

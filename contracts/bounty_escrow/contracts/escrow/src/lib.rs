@@ -9,14 +9,14 @@ mod test_metadata;
 mod test_token_math;
 pub mod token_math;
 
+mod reentrancy_guard;
 #[cfg(test)]
 mod test_claim_tickets;
-mod reentrancy_guard;
 mod test_cross_contract_interface;
 #[cfg(test)]
-mod test_rbac;
-#[cfg(test)]
 mod test_multi_token_fees;
+#[cfg(test)]
+mod test_rbac;
 mod traits;
 
 use events::{
@@ -460,14 +460,14 @@ pub enum DataKey {
     RefundApproval(u64),     // bounty_id -> RefundApproval
     ReentrancyGuard,
     MultisigConfig,
-    ReleaseApproval(u64),   // bounty_id -> ReleaseApproval
-    PendingClaim(u64),      // bounty_id -> ClaimRecord
-    ClaimWindow,            // u64 seconds (global config)
-    PauseFlags,             // PauseFlags struct
-    AmountPolicy,           // Option<(i128, i128)> — (min_amount, max_amount) set by set_amount_policy
-    ClaimTicket(u64),       // ticket_id -> ClaimTicket
-    ClaimTicketIndex,       // Vec<u64> of all ticket_ids
-    TicketCounter,          // u64 counter for generating unique ticket_ids
+    ReleaseApproval(u64),        // bounty_id -> ReleaseApproval
+    PendingClaim(u64),           // bounty_id -> ClaimRecord
+    ClaimWindow,                 // u64 seconds (global config)
+    PauseFlags,                  // PauseFlags struct
+    AmountPolicy, // Option<(i128, i128)> — (min_amount, max_amount) set by set_amount_policy
+    ClaimTicket(u64), // ticket_id -> ClaimTicket
+    ClaimTicketIndex, // Vec<u64> of all ticket_ids
+    TicketCounter, // u64 counter for generating unique ticket_ids
     BeneficiaryTickets(Address), // Address -> Vec<u64> of ticket_ids for beneficiary
     CapabilityNonce, // monotonically increasing capability id
     Capability(u64), // capability_id -> Capability

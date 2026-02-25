@@ -139,15 +139,462 @@
 //! 5. **Balance Checks**: Verify remaining balance matches expectations
 //! 6. **Token Approval**: Ensure contract has token allowance before locking funds
 
+#![no_std]
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, symbol_short, token, vec, Address, Env,
+    String, Symbol, Vec,
+};
+
+// Event types
+const PROGRAM_INITIALIZED: Symbol = symbol_short!("ProgInit");
+const FUNDS_LOCKED: Symbol = symbol_short!("FundLock");
+const BATCH_PAYOUT: Symbol = symbol_short!("BatchPay");
+const PAYOUT: Symbol = symbol_short!("Payout");
+const DEPENDENCY_CREATED: Symbol = symbol_short!("dep_add");
+const DEPENDENCY_CLEARED: Symbol = symbol_short!("dep_clr");
+const DEPENDENCY_STATUS_UPDATED: Symbol = symbol_short!("dep_sts");
+
+// Storage keys
+const PROGRAM_DATA: Symbol = symbol_short!("ProgData");
+const FEE_CONFIG: Symbol = symbol_short!("FeeCfg");
+
+// Fee rate is stored in basis points (1 basis point = 0.01%)
+// Example: 100 basis points = 1%, 1000 basis points = 10%
+const BASIS_POINTS: i128 = 10_000;
+const MAX_FEE_RATE: i128 = 1_000; // Maximum 10% fee
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FeeConfig {
+    pub lock_fee_rate: i128,      // Fee rate for lock operations (basis points)
+    pub payout_fee_rate: i128,     // Fee rate for payout operations (basis points)
+    pub fee_recipient: Address,    // Address to receive fees
+    pub fee_enabled: bool,         // Global fee enable/disable flag
+}
+
+extern crate grainlify_core;
+
+// Event types
+const EVENT_VERSION_V2: u32 = 2;
+const PAUSE_STATE_CHANGED: Symbol = symbol_short!("PauseSt");
+const PROGRAM_REGISTRY: Symbol = symbol_short!("ProgReg");
+const PROGRAM_REGISTERED: Symbol = symbol_short!("ProgRgd");
+const RECEIPT_COUNTER: Symbol = symbol_short!("RcpCntr");
+const PROGRAM_INDEX: Symbol = symbol_short!("ProgIdx");
+const AUTH_KEY_INDEX: Symbol = symbol_short!("AuthIdx");
+const SCHEDULES: Symbol = symbol_short!("Scheds");
+const RELEASE_HISTORY: Symbol = symbol_short!("RelHist");
+const NEXT_SCHEDULE_ID: Symbol = symbol_short!("NxtSched");
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PayoutRecord {
+    pub recipient: Address,
+    pub amount: i128,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProgramInitializedEvent {
+    pub version: u32,
+    pub program_id: String,
+    pub authorized_payout_key: Address,
+    pub token_address: Address,
+    pub total_funds: i128,
+    pub reference_hash: Option<soroban_sdk::Bytes>,
+    pub receipt_id: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FundsLockedEvent {
+    pub version: u32,
+    pub program_id: String,
+    pub amount: i128,
+    pub remaining_balance: i128,
+    pub receipt_id: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BatchPayoutEvent {
+    pub version: u32,
+    pub program_id: String,
+    pub recipient_count: u32,
+    pub total_amount: i128,
+    pub remaining_balance: i128,
+    pub receipt_id: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PayoutEvent {
+    pub version: u32,
+    pub program_id: String,
+    pub recipient: Address,
+    pub amount: i128,
+    pub remaining_balance: i128,
+    pub receipt_id: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ScheduleCreatedEvent {
+    pub program_id: String,
+    pub schedule_id: u64,
+    pub recipient: Address,
+    pub amount: i128,
+    pub release_timestamp: u64,
+    pub receipt_id: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProgramData {
+    pub program_id: String,
+    pub total_funds: i128,
+    pub remaining_balance: i128,
+    pub authorized_payout_key: Address,
+    pub payout_history: Vec<PayoutRecord>,
+    pub token_address: Address,
+    pub initial_liquidity: i128,
+    pub reference_hash: Option<soroban_sdk::Bytes>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum DataKey {
+    Program(String),                 // program_id -> ProgramData
+    Admin,                           // Contract Admin
+    ReleaseSchedule(String, u64),    // program_id, schedule_id -> ProgramReleaseSchedule
+    ReleaseHistory(String),          // program_id -> Vec<ProgramReleaseHistory>
+    NextScheduleId(String),          // program_id -> next schedule_id
+    MultisigConfig(String),          // program_id -> MultisigConfig
+    PayoutApproval(String, Address), // program_id, recipient -> PayoutApproval
+    PendingClaim(String, u64),       // (program_id, schedule_id) -> ClaimRecord
+    ClaimWindow,                     // u64 seconds (global config)
+    PauseFlags,                      // PauseFlags struct
+    RateLimitConfig,                 // RateLimitConfig struct
+    ReceiptCounter,                  // u64 Global Receipt Counter
+    ProgramRegistry,                 // Global registry of all program IDs
+    ProgramDependencies(String),     // program_id -> Vec<dependency_id>
+    DependencyStatus(String),        // dependency_id -> DependencyStatus
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PauseFlags {
+    pub lock_paused: bool,
+    pub release_paused: bool,
+    pub refund_paused: bool,
+    pub pause_reason: Option<String>,
+    pub paused_at: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PauseStateChanged {
+    pub operation: Symbol,
+    pub paused: bool,
+    pub admin: Address,
+    pub reason: Option<String>,
+    pub timestamp: u64,
+    pub receipt_id: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EmergencyWithdrawEvent {
+    pub admin: Address,
+    pub target: Address,
+    pub amount: i128,
+    pub timestamp: u64,
+    pub receipt_id: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RateLimitConfig {
+    pub window_size: u64,
+    pub max_operations: u32,
+    pub cooldown_period: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProgramReleaseSchedule {
+    pub schedule_id: u64,
+    pub recipient: Address,
+    pub amount: i128,
+    pub release_timestamp: u64,
+    pub released: bool,
+    pub released_at: Option<u64>,
+    pub released_by: Option<Address>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ReleaseType {
+    Manual,
+    Automatic,
+    Oracle,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProgramReleaseHistory {
+    pub schedule_id: u64,
+    pub recipient: Address,
+    pub amount: i128,
+    pub released_at: u64,
+    pub release_type: ReleaseType,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum DependencyStatus {
+    Pending,
+    Completed,
+    Failed,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProgramAggregateStats {
+    pub total_funds: i128,
+    pub remaining_balance: i128,
+    pub total_paid_out: i128,
+    pub authorized_payout_key: Address,
+    pub payout_history: Vec<PayoutRecord>,
+    pub token_address: Address,
+    pub payout_count: u32,
+    pub scheduled_count: u32,
+    pub released_count: u32,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProgramInitItem {
+    pub program_id: String,
+    pub authorized_payout_key: Address,
+    pub token_address: Address,
+    pub reference_hash: Option<soroban_sdk::Bytes>,
+}
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum BatchError {
+    InvalidBatchSize = 1,
+    ProgramAlreadyExists = 2,
+    DuplicateProgramId = 3,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MultisigConfig {
+    pub threshold_amount: i128,
+    pub signers: Vec<Address>,
+    pub required_signatures: u32,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PayoutApproval {
+    pub program_id: String,
+    pub recipient: Address,
+    pub amount: i128,
+    pub approvals: Vec<Address>,
+}
+
+pub const MAX_BATCH_SIZE: u32 = 100;
+
+fn vec_contains(values: &Vec<String>, target: &String) -> bool {
+    for value in values.iter() {
+        if value == *target {
+            return true;
+        }
+    }
+    false
+}
+
+fn get_program_dependencies_internal(env: &Env, program_id: &String) -> Vec<String> {
+    env.storage()
+        .instance()
+        .get(&DataKey::ProgramDependencies(program_id.clone()))
+        .unwrap_or(vec![env])
+}
+
+fn dependency_status_internal(env: &Env, dependency_id: &String) -> DependencyStatus {
+    env.storage()
+        .instance()
+        .get(&DataKey::DependencyStatus(dependency_id.clone()))
+        .unwrap_or(DependencyStatus::Pending)
+}
+
+fn path_exists_to_target(
+    env: &Env,
+    from_program: &String,
+    target_program: &String,
+    visited: &mut Vec<String>,
+) -> bool {
+    if *from_program == *target_program {
+        return true;
+    }
+    if vec_contains(visited, from_program) {
+        return false;
+    }
+
+    visited.push_back(from_program.clone());
+    let deps = get_program_dependencies_internal(env, from_program);
+    for dep in deps.iter() {
+        if env.storage().instance().has(&DataKey::Program(dep.clone()))
+            && path_exists_to_target(env, &dep, target_program, visited)
+        {
+            return true;
+        }
+    }
+
+    false
+}
+mod anti_abuse {
+    use soroban_sdk::{symbol_short, Address, Env, Symbol};
+
+    const ADMIN: Symbol = symbol_short!("AbuseAdm");
+    const RATE_LIMIT: Symbol = symbol_short!("RateLim");
+
+    pub fn set_admin(env: &Env, admin: Address) {
+        env.storage().instance().set(&ADMIN, &admin);
+    }
+
+    pub fn get_admin(env: &Env) -> Option<Address> {
+        env.storage().instance().get(&ADMIN)
+    }
+
+    pub fn check_rate_limit(env: &Env, _caller: Address) {
+        let count: u32 = env.storage().instance().get(&RATE_LIMIT).unwrap_or(0);
+        env.storage().instance().set(&RATE_LIMIT, &(count + 1));
+    }
+}
+
+// ==================== MONITORING MODULE ====================
+mod monitoring {
+    use soroban_sdk::{contracttype, symbol_short, Address, Env, String, Symbol};
+
+    // Storage keys
+    const OPERATION_COUNT: &str = "op_count";
+    const USER_COUNT: &str = "usr_count";
+    const ERROR_COUNT: &str = "err_count";
+
+    // Event: Operation metric
+    #[contracttype]
+    #[derive(Clone, Debug)]
+    pub struct OperationMetric {
+        pub operation: Symbol,
+        pub caller: Address,
+        pub timestamp: u64,
+        pub success: bool,
+    }
+
+    // Event: Performance metric
+    #[contracttype]
+    #[derive(Clone, Debug)]
+    pub struct PerformanceMetric {
+        pub function: Symbol,
+        pub duration: u64,
+        pub timestamp: u64,
+    }
+
+    // Data: Health status
+    #[contracttype]
+    #[derive(Clone, Debug)]
+    pub struct HealthStatus {
+        pub is_healthy: bool,
+        pub last_operation: u64,
+        pub total_operations: u64,
+        pub contract_version: String,
+    }
+
+    // Data: Analytics
+    #[contracttype]
+    #[derive(Clone, Debug)]
+    pub struct Analytics {
+        pub operation_count: u64,
+        pub unique_users: u64,
+        pub error_count: u64,
+        pub error_rate: u32,
+    }
+
+    // Data: State snapshot
+    #[contracttype]
+    #[derive(Clone, Debug)]
+    pub struct StateSnapshot {
+        pub timestamp: u64,
+        pub total_operations: u64,
+        pub total_users: u64,
+        pub total_errors: u64,
+    }
+
+    // Data: Performance stats
+    #[contracttype]
+    #[derive(Clone, Debug)]
+    pub struct PerformanceStats {
+        pub function_name: Symbol,
+        pub call_count: u64,
+        pub total_time: u64,
+        pub avg_time: u64,
+        pub last_called: u64,
+    }
+
+    // Track operation
+    pub fn track_operation(env: &Env, operation: Symbol, caller: Address, success: bool) {
+        let key = Symbol::new(env, OPERATION_COUNT);
+        let count: u64 = env.storage().persistent().get(&key).unwrap_or(0);
+        env.storage().persistent().set(&key, &(count + 1));
+
+        if !success {
+            let err_key = Symbol::new(env, ERROR_COUNT);
+            let err_count: u64 = env.storage().persistent().get(&err_key).unwrap_or(0);
+            env.storage().persistent().set(&err_key, &(err_count + 1));
+        }
+
+        env.events().publish(
+            (symbol_short!("metric"),),
+            OperationMetric {
+                operation,
+                caller,
+                timestamp: env.ledger().timestamp(),
+                success,
+            },
+        );
+    }
+
+    pub fn emit_performance(env: &Env, function: Symbol, duration: u64) {
+        env.events().publish(
+            (symbol_short!("perf"),),
+            PerformanceMetric {
+                function,
+                duration,
+                timestamp: env.ledger().timestamp(),
+            },
+        );
+    }
+}
+
 // ── Step 1: Add module declarations near the top of lib.rs ──────────────
 // (after `mod anti_abuse;` and before the contract struct)
 
 mod claim_period;
+pub mod token_math;
 pub use claim_period::{ClaimRecord, ClaimStatus};
 mod error_recovery;
 mod reentrancy_guard;
 #[cfg(test)]
 mod test_claim_period_expiry_cancellation;
+
+#[cfg(test)]
+mod test_token_math;
 
 #[cfg(test)]
 mod test_circuit_breaker_audit;
@@ -266,268 +713,6 @@ pub fn emergency_open_circuit(env: Env, admin: Address) {
     error_recovery::open_circuit(&env);
 }
 
-use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, token, vec, Address, Env,
-    String, Symbol, Vec,
-};
-
-// Event types
-const PROGRAM_INITIALIZED: Symbol = symbol_short!("PrgInit");
-const FUNDS_LOCKED: Symbol = symbol_short!("FndsLock");
-const BATCH_PAYOUT: Symbol = symbol_short!("BatchPay");
-const PAYOUT: Symbol = symbol_short!("Payout");
-const EVENT_VERSION_V2: u32 = 2;
-const PAUSE_STATE_CHANGED: Symbol = symbol_short!("PauseSt");
-const PROGRAM_REGISTRY: Symbol = symbol_short!("ProgReg");
-const PROGRAM_REGISTERED: Symbol = symbol_short!("ProgRgd");
-const FEE_CONFIG: Symbol = symbol_short!("FeeCfg");
-const BASIS_POINTS: i128 = 10_000;
-
-// Storage keys
-const PROGRAM_DATA: Symbol = symbol_short!("ProgData");
-const SCHEDULES: Symbol = symbol_short!("Scheds");
-const RELEASE_HISTORY: Symbol = symbol_short!("RelHist");
-const NEXT_SCHEDULE_ID: Symbol = symbol_short!("NxtSched");
-const RECEIPT_COUNTER: Symbol = symbol_short!("RcpCntr");
-const PROGRAM_INDEX: Symbol = symbol_short!("ProgIdx");
-const AUTH_KEY_INDEX: Symbol = symbol_short!("AuthIdx");
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PayoutRecord {
-    pub recipient: Address,
-    pub amount: i128,
-    pub timestamp: u64,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct FeeConfig {
-    pub lock_fee_rate: i128,
-    pub payout_fee_rate: i128,
-    pub fee_recipient: Address,
-    pub fee_enabled: bool,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ProgramInitializedEvent {
-    pub version: u32,
-    pub program_id: String,
-    pub authorized_payout_key: Address,
-    pub token_address: Address,
-    pub total_funds: i128,
-    pub reference_hash: Option<soroban_sdk::Bytes>,
-    pub receipt_id: u64,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct FundsLockedEvent {
-    pub version: u32,
-    pub program_id: String,
-    pub amount: i128,
-    pub remaining_balance: i128,
-    pub receipt_id: u64,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct BatchPayoutEvent {
-    pub version: u32,
-    pub program_id: String,
-    pub recipient_count: u32,
-    pub total_amount: i128,
-    pub remaining_balance: i128,
-    pub receipt_id: u64,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PayoutEvent {
-    pub version: u32,
-    pub program_id: String,
-    pub recipient: Address,
-    pub amount: i128,
-    pub remaining_balance: i128,
-    pub receipt_id: u64,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ScheduleCreatedEvent {
-    pub program_id: String,
-    pub schedule_id: u64,
-    pub recipient: Address,
-    pub amount: i128,
-    pub release_timestamp: u64,
-    pub receipt_id: u64,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ProgramData {
-    pub program_id: String,
-    pub total_funds: i128,
-    pub remaining_balance: i128,
-    pub authorized_payout_key: Address,
-    pub payout_history: Vec<PayoutRecord>,
-    pub token_address: Address,  // Token contract address for transfers
-    pub initial_liquidity: i128, // Initial liquidity provided by creator
-    pub reference_hash: Option<soroban_sdk::Bytes>,
-}
-
-/// Storage key type for individual programs
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum DataKey {
-    Program(String),                 // program_id -> ProgramData
-    Admin,                           // Contract Admin
-    ReleaseSchedule(String, u64),    // program_id, schedule_id -> ProgramReleaseSchedule
-    ReleaseHistory(String),          // program_id -> Vec<ProgramReleaseHistory>
-    NextScheduleId(String),          // program_id -> next schedule_id
-    MultisigConfig(String),          // program_id -> MultisigConfig
-    PayoutApproval(String, Address), // program_id, recipient -> PayoutApproval
-    PendingClaim(String, u64),       // (program_id, schedule_id) -> ClaimRecord
-    ClaimWindow,                     // u64 seconds (global config)
-    PauseFlags,                      // PauseFlags struct
-    RateLimitConfig,                 // RateLimitConfig struct
-    ReceiptCounter,                  // u64 Global Receipt Counter
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PauseFlags {
-    pub lock_paused: bool,
-    pub release_paused: bool,
-    pub refund_paused: bool,
-    pub pause_reason: Option<String>,
-    pub paused_at: u64,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PauseStateChanged {
-    pub operation: Symbol,
-    pub paused: bool,
-    pub admin: Address,
-    pub reason: Option<String>,
-    pub timestamp: u64,
-    pub receipt_id: u64,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct EmergencyWithdrawEvent {
-    pub admin: Address,
-    pub target: Address,
-    pub amount: i128,
-    pub timestamp: u64,
-    pub receipt_id: u64,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct RateLimitConfig {
-    pub window_size: u64,
-    pub max_operations: u32,
-    pub cooldown_period: u64,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Analytics {
-    pub total_locked: i128,
-    pub total_released: i128,
-    pub total_payouts: u32,
-    pub active_programs: u32,
-    pub operation_count: u32,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ProgramReleaseSchedule {
-    pub schedule_id: u64,
-    pub recipient: Address,
-    pub amount: i128,
-    pub release_timestamp: u64,
-    pub released: bool,
-    pub released_at: Option<u64>,
-    pub released_by: Option<Address>,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ReleaseType {
-    Manual,
-    Automatic,
-    Oracle,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ProgramReleaseHistory {
-    pub schedule_id: u64,
-    pub recipient: Address,
-    pub amount: i128,
-    pub released_at: u64,
-    pub release_type: ReleaseType,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ProgramAggregateStats {
-    pub total_funds: i128,
-    pub remaining_balance: i128,
-    pub total_paid_out: i128,
-    pub authorized_payout_key: Address,
-    pub payout_history: Vec<PayoutRecord>,
-    pub token_address: Address,
-    pub payout_count: u32,
-    pub scheduled_count: u32,
-    pub released_count: u32,
-}
-
-/// Input item for batch program registration.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ProgramInitItem {
-    pub program_id: String,
-    pub authorized_payout_key: Address,
-    pub token_address: Address,
-    pub reference_hash: Option<soroban_sdk::Bytes>,
-}
-
-/// Maximum number of programs per batch (aligned with bounty_escrow).
-pub const MAX_BATCH_SIZE: u32 = 100;
-
-/// Errors for batch program registration.
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum BatchError {
-    InvalidBatchSize = 1,
-    ProgramAlreadyExists = 2,
-    DuplicateProgramId = 3,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct MultisigConfig {
-    pub threshold_amount: i128,
-    pub signers: Vec<Address>,
-    pub required_signatures: u32,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PayoutApproval {
-    pub program_id: String,
-    pub recipient: Address,
-    pub amount: i128,
-    pub approvals: Vec<Address>,
-}
-
 #[contract]
 pub struct ProgramEscrowContract;
 
@@ -585,9 +770,10 @@ impl ProgramEscrowContract {
         reference_hash: Option<soroban_sdk::Bytes>,
     ) -> ProgramData {
         let receipt_id = Self::increment_receipt_id(&env);
+        let program_key = DataKey::Program(program_id.clone());
 
         // Check if program already exists
-        if env.storage().instance().has(&PROGRAM_DATA) {
+        if env.storage().instance().has(&program_key) {
             panic!("Program already initialized");
         }
 
@@ -620,7 +806,7 @@ impl ProgramEscrowContract {
         };
 
         // Store program data
-        env.storage().instance().set(&PROGRAM_DATA, &program_data);
+        env.storage().instance().set(&program_key, &program_data);
         env.storage()
             .instance()
             .set(&SCHEDULES, &Vec::<ProgramReleaseSchedule>::new(&env));
@@ -647,11 +833,6 @@ impl ProgramEscrowContract {
     }
 
     /// Batch-initialize multiple programs in one transaction (all-or-nothing).
-    ///
-    /// # Errors
-    /// * `BatchError::InvalidBatchSize` - empty or len > MAX_BATCH_SIZE
-    /// * `BatchError::DuplicateProgramId` - duplicate program_id in items
-    /// * `BatchError::ProgramAlreadyExists` - a program_id already registered
     pub fn batch_initialize_programs(
         env: Env,
         items: Vec<ProgramInitItem>,
@@ -743,16 +924,9 @@ impl ProgramEscrowContract {
         Ok(batch_size as u32)
     }
 
-    /// Calculate fee amount based on rate (in basis points)
+    /// Calculate fee using floor rounding. Delegates to `token_math::calculate_fee`.
     fn calculate_fee(amount: i128, fee_rate: i128) -> i128 {
-        if fee_rate == 0 {
-            return 0;
-        }
-        // Fee = (amount * fee_rate) / BASIS_POINTS
-        amount
-            .checked_mul(fee_rate)
-            .and_then(|x| x.checked_div(BASIS_POINTS))
-            .unwrap_or(0)
+        token_math::calculate_fee(amount, fee_rate)
     }
 
     /// Get fee configuration (internal helper)
@@ -781,6 +955,174 @@ impl ProgramEscrowContract {
         env.storage().instance().has(&DataKey::Program(program_id))
     }
 
+    fn assert_dependencies_satisfied(env: &Env, program_id: &String) {
+        let dependencies = get_program_dependencies_internal(env, program_id);
+        for dependency_id in dependencies.iter() {
+            match dependency_status_internal(env, &dependency_id) {
+                DependencyStatus::Completed => {}
+                DependencyStatus::Pending => panic!("Dependency not satisfied"),
+                DependencyStatus::Failed => panic!("Dependency failed"),
+            }
+        }
+    }
+
+    /// Defines explicit dependencies for a program.
+    ///
+    /// Dependencies can point to:
+    /// - another registered program id; or
+    /// - an externally managed dependency id with a pre-registered status.
+    ///
+    /// Cycle checks are applied for program-to-program edges.
+    pub fn set_program_dependencies(
+        env: Env,
+        program_id: String,
+        dependency_ids: Vec<String>,
+    ) -> Vec<String> {
+        let program_key = DataKey::Program(program_id.clone());
+        let program_data: ProgramData = env
+            .storage()
+            .instance()
+            .get(&program_key)
+            .unwrap_or_else(|| panic!("Program not found"));
+
+        program_data.authorized_payout_key.require_auth();
+
+        let old_dependencies = get_program_dependencies_internal(&env, &program_id);
+        let mut validated_dependencies = vec![&env];
+
+        for dependency_id in dependency_ids.iter() {
+            if dependency_id.len() == 0 {
+                panic!("Dependency id cannot be empty");
+            }
+            if dependency_id == program_id {
+                panic!("Program cannot depend on itself");
+            }
+            if vec_contains(&validated_dependencies, &dependency_id) {
+                panic!("Duplicate dependency");
+            }
+
+            let is_program_dependency = env
+                .storage()
+                .instance()
+                .has(&DataKey::Program(dependency_id.clone()));
+            let is_registered_external = env
+                .storage()
+                .instance()
+                .has(&DataKey::DependencyStatus(dependency_id.clone()));
+            if !is_program_dependency && !is_registered_external {
+                panic!("Dependency not registered");
+            }
+
+            if is_program_dependency {
+                let mut visited = Vec::new(&env);
+                if path_exists_to_target(&env, &dependency_id, &program_id, &mut visited) {
+                    panic!("Dependency cycle detected");
+                }
+            }
+
+            validated_dependencies.push_back(dependency_id.clone());
+        }
+
+        env.storage().instance().set(
+            &DataKey::ProgramDependencies(program_id.clone()),
+            &validated_dependencies,
+        );
+
+        for dependency_id in validated_dependencies.iter() {
+            if !vec_contains(&old_dependencies, &dependency_id) {
+                env.events().publish(
+                    (DEPENDENCY_CREATED,),
+                    (program_id.clone(), dependency_id.clone()),
+                );
+            }
+        }
+        for dependency_id in old_dependencies.iter() {
+            if !vec_contains(&validated_dependencies, &dependency_id) {
+                env.events().publish(
+                    (DEPENDENCY_CLEARED,),
+                    (program_id.clone(), dependency_id.clone()),
+                );
+            }
+        }
+
+        validated_dependencies
+    }
+
+    /// Clears all dependencies for a program.
+    pub fn clear_program_dependencies(env: Env, program_id: String) {
+        let program_key = DataKey::Program(program_id.clone());
+        let program_data: ProgramData = env
+            .storage()
+            .instance()
+            .get(&program_key)
+            .unwrap_or_else(|| panic!("Program not found"));
+
+        program_data.authorized_payout_key.require_auth();
+
+        let old_dependencies = get_program_dependencies_internal(&env, &program_id);
+        let empty_dependencies: Vec<String> = vec![&env];
+        env.storage()
+            .instance()
+            .set(&DataKey::ProgramDependencies(program_id.clone()), &empty_dependencies);
+
+        for dependency_id in old_dependencies.iter() {
+            env.events().publish(
+                (DEPENDENCY_CLEARED,),
+                (program_id.clone(), dependency_id.clone()),
+            );
+        }
+    }
+
+    /// Reads all dependencies configured for a program.
+    pub fn get_program_dependencies(env: Env, program_id: String) -> Vec<String> {
+        if !env
+            .storage()
+            .instance()
+            .has(&DataKey::Program(program_id.clone()))
+        {
+            panic!("Program not found");
+        }
+        get_program_dependencies_internal(&env, &program_id)
+    }
+
+    /// Updates dependency status.
+    ///
+    /// For registered programs, only that program's authorized payout key can update status.
+    /// For external dependency ids, anti-abuse admin authorization is required.
+    pub fn set_dependency_status(env: Env, dependency_id: String, status: DependencyStatus) {
+        if dependency_id.len() == 0 {
+            panic!("Dependency id cannot be empty");
+        }
+
+        if env
+            .storage()
+            .instance()
+            .has(&DataKey::Program(dependency_id.clone()))
+        {
+            let program_data: ProgramData = env
+                .storage()
+                .instance()
+                .get(&DataKey::Program(dependency_id.clone()))
+                .unwrap();
+            program_data.authorized_payout_key.require_auth();
+        } else {
+            let admin = anti_abuse::get_admin(&env)
+                .unwrap_or_else(|| panic!("Admin not set for external dependency status update"));
+            admin.require_auth();
+        }
+
+        env.storage()
+            .instance()
+            .set(&DataKey::DependencyStatus(dependency_id.clone()), &status.clone());
+        env.events()
+            .publish((DEPENDENCY_STATUS_UPDATED,), (dependency_id, status));
+    }
+
+    /// Reads dependency status; defaults to pending if no explicit status exists.
+    pub fn get_dependency_status(env: Env, dependency_id: String) -> DependencyStatus {
+        dependency_status_internal(&env, &dependency_id)
+    }
+
     // ========================================================================
     // Fund Management
     // ========================================================================
@@ -791,8 +1133,12 @@ impl ProgramEscrowContract {
     /// * `amount` - Amount of funds to lock (in native token units)
     ///
     /// # Returns
-    /// Updated ProgramData with locked funds
-    pub fn lock_program_funds(env: Env, amount: i128) -> ProgramData {
+    /// * `ProgramData` - Updated program data with new balance
+
+    pub fn lock_program_funds(env: Env, program_id: String, amount: i128) -> ProgramData {
+        // Apply rate limiting
+        anti_abuse::check_rate_limit(&env, env.current_contract_address());
+
         if Self::check_paused(&env, symbol_short!("lock")) {
             panic!("Funds Paused");
         }
@@ -801,18 +1147,22 @@ impl ProgramEscrowContract {
             panic!("Amount must be greater than zero");
         }
 
+        let program_key = DataKey::Program(program_id.clone());
         let mut program_data: ProgramData = env
             .storage()
             .instance()
-            .get(&PROGRAM_DATA)
+            .get(&program_key)
             .unwrap_or_else(|| panic!("Program not initialized"));
+
+        // Require the authorized payout key or creator
+        program_data.authorized_payout_key.require_auth();
 
         // Update balances
         program_data.total_funds += amount;
         program_data.remaining_balance += amount;
 
         // Store updated data
-        env.storage().instance().set(&PROGRAM_DATA, &program_data);
+        env.storage().instance().set(&program_key, &program_data);
 
         let receipt_id = Self::increment_receipt_id(&env);
 
@@ -1080,13 +1430,12 @@ impl ProgramEscrowContract {
             })
     }
 
-    pub fn get_analytics(_env: Env) -> Analytics {
-        Analytics {
-            total_locked: 0,
-            total_released: 0,
-            total_payouts: 0,
-            active_programs: 0,
+    pub fn get_analytics(_env: Env) -> monitoring::Analytics {
+        monitoring::Analytics {
             operation_count: 0,
+            unique_users: 0,
+            error_count: 0,
+            error_rate: 0,
         }
     }
 
@@ -1111,7 +1460,12 @@ impl ProgramEscrowContract {
     ///
     /// # Returns
     /// Updated ProgramData after payouts
-    pub fn batch_payout(env: Env, recipients: Vec<Address>, amounts: Vec<i128>) -> ProgramData {
+    pub fn batch_payout(
+        env: Env,
+        program_id: String,
+        recipients: Vec<Address>,
+        amounts: Vec<i128>,
+    ) -> ProgramData {
         // Reentrancy guard: Check and set
         reentrancy_guard::check_not_entered(&env);
         reentrancy_guard::set_entered(&env);
@@ -1122,14 +1476,20 @@ impl ProgramEscrowContract {
         }
 
         // Verify authorization
+        let program_key = DataKey::Program(program_id.clone());
         let program_data: ProgramData =
             env.storage()
                 .instance()
-                .get(&PROGRAM_DATA)
+                .get(&program_key)
                 .unwrap_or_else(|| {
                     reentrancy_guard::clear_entered(&env);
-                    panic!("Program not initialized")
+                    panic!("Program not found")
                 });
+
+        Self::assert_dependencies_satisfied(&env, &program_data.program_id);
+
+        // Apply rate limiting to the authorized payout key
+        anti_abuse::check_rate_limit(&env, program_data.authorized_payout_key.clone());
 
         program_data.authorized_payout_key.require_auth();
 
@@ -1191,7 +1551,7 @@ impl ProgramEscrowContract {
         updated_data.payout_history = updated_history;
 
         // Store updated data
-        env.storage().instance().set(&PROGRAM_DATA, &updated_data);
+        env.storage().instance().set(&program_key, &updated_data);
 
         let receipt_id = Self::increment_receipt_id(&env);
 
@@ -1220,9 +1580,20 @@ impl ProgramEscrowContract {
     /// * `recipient` - Address of the recipient
     /// * `amount` - Amount to transfer
     ///
-    /// # Returns
-    /// Updated ProgramData after payout
-    pub fn single_payout(env: Env, recipient: Address, amount: i128) -> ProgramData {
+    pub fn single_payout(
+        env: Env,
+        program_id: String,
+        recipient: Address,
+        amount: i128,
+    ) -> ProgramData {
+        // Get program data
+        let program_key = DataKey::Program(program_id.clone());
+        let program_data: ProgramData = env
+            .storage()
+            .instance()
+            .get(&program_key)
+            .unwrap_or_else(|| panic!("Program not found"));
+
         // Reentrancy guard: Check and set
         reentrancy_guard::check_not_entered(&env);
         reentrancy_guard::set_entered(&env);
@@ -1232,17 +1603,11 @@ impl ProgramEscrowContract {
             panic!("Funds Paused");
         }
 
-        // Verify authorization
-        let program_data: ProgramData =
-            env.storage()
-                .instance()
-                .get(&PROGRAM_DATA)
-                .unwrap_or_else(|| {
-                    reentrancy_guard::clear_entered(&env);
-                    panic!("Program not initialized")
-                });
+        Self::assert_dependencies_satisfied(&env, &program_id);
 
         program_data.authorized_payout_key.require_auth();
+        // Apply rate limiting to the authorized payout key
+        anti_abuse::check_rate_limit(&env, program_data.authorized_payout_key.clone());
 
         // Validate amount
         if amount <= 0 {
@@ -1278,7 +1643,7 @@ impl ProgramEscrowContract {
         updated_data.payout_history = updated_history;
 
         // Store updated data
-        env.storage().instance().set(&PROGRAM_DATA, &updated_data);
+        env.storage().instance().set(&program_key, &updated_data);
 
         let receipt_id = Self::increment_receipt_id(&env);
 
@@ -1384,7 +1749,6 @@ impl ProgramEscrowContract {
                 receipt_id,
             },
         );
-
         schedule
     }
 
@@ -1414,6 +1778,8 @@ impl ProgramEscrowContract {
             .instance()
             .get(&RELEASE_HISTORY)
             .unwrap_or_else(|| Vec::new(&env));
+
+        Self::assert_dependencies_satisfied(&env, &program_data.program_id);
 
         let now = env.ledger().timestamp();
         let contract_address = env.current_contract_address();
@@ -1464,6 +1830,7 @@ impl ProgramEscrowContract {
                 released_at: now,
                 release_type: ReleaseType::Automatic,
             });
+
             released_count += 1;
         }
 
@@ -1477,6 +1844,106 @@ impl ProgramEscrowContract {
         reentrancy_guard::clear_entered(&env);
 
         released_count
+    }
+
+    /// Manually releases funds for a program schedule (authorized payout key only).
+    /// Can be called before the release timestamp by authorized key
+    pub fn release_program_schedule_manual(
+        env: Env,
+        program_id: String,
+        schedule_id: u64,
+    ) {
+        let start = env.ledger().timestamp();
+
+        // Get program data
+        let program_key = DataKey::Program(program_id.clone());
+        let program_data: ProgramData = env
+            .storage()
+            .instance()
+            .get(&program_key)
+            .unwrap_or_else(|| panic!("Program not found"));
+
+        Self::assert_dependencies_satisfied(&env, &program_id);
+
+        // Apply rate limiting to the authorized payout key
+        anti_abuse::check_rate_limit(&env, program_data.authorized_payout_key.clone());
+
+        // Verify authorization
+        program_data.authorized_payout_key.require_auth();
+
+        // Get schedule
+        if !env
+            .storage()
+            .persistent()
+            .has(&DataKey::ReleaseSchedule(program_id.clone(), schedule_id))
+        {
+            panic!("Schedule not found");
+        }
+
+        let mut schedule: ProgramReleaseSchedule = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ReleaseSchedule(program_id.clone(), schedule_id))
+            .unwrap();
+
+        // Check if already released
+        if schedule.released {
+            panic!("Schedule already released");
+        }
+
+
+        // Check sufficient balance
+        let program_key2 = DataKey::Program(program_id.clone());
+        let mut program_data: ProgramData = env
+            .storage()
+            .instance()
+            .get(&program_key2)
+            .unwrap_or_else(|| panic!("Program not found"));
+
+        if schedule.amount > program_data.remaining_balance {
+            panic!("Insufficient balance");
+        }
+
+        let contract_address = env.current_contract_address();
+        let token_client = token::Client::new(&env, &program_data.token_address);
+        token_client.transfer(&contract_address, &schedule.recipient, &schedule.amount);
+
+        let now = env.ledger().timestamp();
+        schedule.released = true;
+        schedule.released_at = Some(now);
+        schedule.released_by = Some(contract_address.clone());
+        env.storage().persistent().set(
+            &DataKey::ReleaseSchedule(program_id.clone(), schedule_id),
+            &schedule,
+        );
+
+        program_data.remaining_balance -= schedule.amount;
+        program_data.payout_history.push_back(PayoutRecord {
+            recipient: schedule.recipient.clone(),
+            amount: schedule.amount,
+            timestamp: now,
+        });
+
+        let receipt_id = Self::increment_receipt_id(&env);
+        env.events().publish(
+            (PAYOUT,),
+            PayoutEvent {
+                version: EVENT_VERSION_V2,
+                program_id: program_data.program_id.clone(),
+                recipient: schedule.recipient.clone(),
+                amount: schedule.amount,
+                remaining_balance: program_data.remaining_balance,
+                receipt_id,
+            },
+        );
+
+        env.storage().instance().set(&program_key, &program_data);
+
+        // Track successful operation
+        monitoring::track_operation(&env, symbol_short!("rel_man"), program_data.authorized_payout_key.clone(), true);
+
+        let duration = env.ledger().timestamp().saturating_sub(start);
+        monitoring::emit_performance(&env, symbol_short!("rel_man"), duration);
     }
 
     pub fn get_release_schedules(env: Env) -> Vec<ProgramReleaseSchedule> {
@@ -1501,26 +1968,26 @@ impl ProgramEscrowContract {
         Self::get_program_info(env)
     }
 
-    pub fn lock_program_funds_v2(env: Env, _program_id: String, amount: i128) -> ProgramData {
-        Self::lock_program_funds(env, amount)
+    pub fn lock_program_funds_v2(env: Env, program_id: String, amount: i128) -> ProgramData {
+        Self::lock_program_funds(env, program_id, amount)
     }
 
     pub fn single_payout_v2(
         env: Env,
-        _program_id: String,
+        program_id: String,
         recipient: Address,
         amount: i128,
     ) -> ProgramData {
-        Self::single_payout(env, recipient, amount)
+        Self::single_payout(env, program_id, recipient, amount)
     }
 
     pub fn batch_payout_v2(
         env: Env,
-        _program_id: String,
+        program_id: String,
         recipients: Vec<Address>,
         amounts: Vec<i128>,
     ) -> ProgramData {
-        Self::batch_payout(env, recipients, amounts)
+        Self::batch_payout(env, program_id, recipients, amounts)
     }
 
     /// Query payout history by recipient with pagination
@@ -1891,81 +2358,6 @@ impl ProgramEscrowContract {
         Self::get_due_schedules(env)
     }
 
-    pub fn release_program_schedule_manual(env: Env, schedule_id: u64) {
-        let mut schedules = Self::get_release_schedules(env.clone());
-        let program_data = Self::get_program_info(env.clone());
-
-        program_data.authorized_payout_key.require_auth();
-
-        let caller = program_data.authorized_payout_key.clone();
-        let now = env.ledger().timestamp();
-        let mut released_schedule: Option<ProgramReleaseSchedule> = None;
-
-        let mut found = false;
-        for i in 0..schedules.len() {
-            let mut s = schedules.get(i).unwrap();
-            if s.schedule_id == schedule_id {
-                if s.released {
-                    panic!("Already released");
-                }
-
-                // Transfer funds
-                let token_client = token::Client::new(&env, &program_data.token_address);
-                token_client.transfer(&env.current_contract_address(), &s.recipient, &s.amount);
-
-                s.released = true;
-                s.released_at = Some(now);
-                s.released_by = Some(caller.clone());
-                released_schedule = Some(s.clone());
-                schedules.set(i, s);
-                found = true;
-                break;
-            }
-        }
-
-        if !found {
-            panic!("Schedule not found");
-        }
-
-        env.storage().instance().set(&SCHEDULES, &schedules);
-
-        // Write to release history
-        if let Some(s) = released_schedule {
-            let mut updated_program_data = program_data.clone();
-            updated_program_data.remaining_balance -= s.amount;
-            env.storage()
-                .instance()
-                .set(&PROGRAM_DATA, &updated_program_data);
-
-            let mut history: Vec<ProgramReleaseHistory> = env
-                .storage()
-                .instance()
-                .get(&RELEASE_HISTORY)
-                .unwrap_or_else(|| Vec::new(&env));
-            history.push_back(ProgramReleaseHistory {
-                schedule_id: s.schedule_id,
-                recipient: s.recipient.clone(),
-                amount: s.amount,
-                released_at: now,
-                release_type: ReleaseType::Manual,
-            });
-            env.storage().instance().set(&RELEASE_HISTORY, &history);
-
-            let receipt_id = Self::increment_receipt_id(&env);
-            env.events().publish(
-                (PAYOUT,),
-                PayoutEvent {
-                    version: EVENT_VERSION_V2,
-                    program_id: updated_program_data.program_id.clone(),
-                    recipient: s.recipient,
-                    amount: s.amount,
-                    remaining_balance: updated_program_data.remaining_balance,
-                    receipt_id,
-                },
-            );
-        }
-    }
-
     pub fn release_prog_schedule_automatic(env: Env, schedule_id: u64) {
         let mut schedules = Self::get_release_schedules(env.clone());
         let program_data = Self::get_program_info(env.clone());
@@ -2003,7 +2395,6 @@ impl ProgramEscrowContract {
 
         env.storage().instance().set(&SCHEDULES, &schedules);
 
-        // Write to release history
         if let Some(s) = released_schedule {
             let mut updated_program_data = program_data.clone();
             updated_program_data.remaining_balance -= s.amount;
@@ -2039,37 +2430,8 @@ impl ProgramEscrowContract {
             );
         }
     }
-
-    pub fn create_pending_claim(
-        env: Env,
-        program_id: String,
-        recipient: Address,
-        amount: i128,
-        claim_deadline: u64,
-    ) -> u64 {
-        claim_period::create_pending_claim(&env, &program_id, &recipient, amount, claim_deadline)
-    }
-
-    pub fn execute_claim(env: Env, program_id: String, claim_id: u64, recipient: Address) {
-        claim_period::execute_claim(&env, &program_id, claim_id, &recipient)
-    }
-
-    pub fn cancel_claim(env: Env, program_id: String, claim_id: u64, admin: Address) {
-        claim_period::cancel_claim(&env, &program_id, claim_id, &admin)
-    }
-
-    pub fn get_claim(env: Env, program_id: String, claim_id: u64) -> claim_period::ClaimRecord {
-        claim_period::get_claim(&env, &program_id, claim_id)
-    }
-
-    pub fn set_claim_window(env: Env, admin: Address, window_seconds: u64) {
-        claim_period::set_claim_window(&env, &admin, window_seconds)
-    }
-
-    pub fn get_claim_window(env: Env) -> u64 {
-        claim_period::get_claim_window(&env)
-    }
 }
+
 
 #[cfg(test)]
 mod test;

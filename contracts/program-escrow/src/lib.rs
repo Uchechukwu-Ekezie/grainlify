@@ -2328,268 +2328,8 @@ impl ProgramEscrowContract {
             );
         }
     }
-}
 
-/// ============================================================================
-// Tests
-// ============================================================================
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use soroban_sdk::{
-        testutils::{Address as _, Ledger},
-        token, Address, Env, String,
-    };
-
-    // Test helper to create a mock token contract
-    fn create_token_contract<'a>(env: &Env, admin: &Address) -> token::Client<'a> {
-        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
-        let token_address = token_contract.address();
-        token::Client::new(env, &token_address)
-    }
-
-    #[test]
-    #[should_panic(expected = "Program not found")]
-    fn test_get_nonexistent_program() {
-        let env = Env::default();
-        let contract_id = env.register_contract(None, ProgramEscrowContract);
-        let client = ProgramEscrowContractClient::new(&env, &contract_id);
-
-        let prog_id = String::from_str(&env, "DoesNotExist");
-        client.get_program_info(&prog_id);
-    }
-
-    #[test]
-    fn test_dependency_gated_release_flow() {
-        let env = Env::default();
-        env.mock_all_auths();
-        let contract_id = env.register_contract(None, ProgramEscrowContract);
-        let client = ProgramEscrowContractClient::new(&env, &contract_id);
-
-        let token_admin = Address::generate(&env);
-        let token_client = create_token_contract(&env, &token_admin);
-        let token_asset = token::StellarAssetClient::new(&env, &token_client.address);
-
-        let dep_backend = Address::generate(&env);
-        let target_backend = Address::generate(&env);
-        let dependency_program = String::from_str(&env, "dependency-program");
-        let target_program = String::from_str(&env, "target-program");
-        let winner = Address::generate(&env);
-        let amount = 10_000_000i128;
-
-        token_asset.mint(&token_admin, &amount);
-        token_client.transfer(&token_admin, &contract_id, &amount);
-
-        client.initialize_program(&dependency_program, &dep_backend, &token_client.address);
-        client.initialize_program(&target_program, &target_backend, &token_client.address);
-        client.lock_program_funds(&target_program, &amount);
-        client.create_program_release_schedule(&target_program, &amount, &1000, &winner);
-
-        let dependencies = soroban_sdk::vec![&env, dependency_program.clone()];
-        client.set_program_dependencies(&target_program, &dependencies);
-
-        env.ledger().set_timestamp(1001);
-        let blocked = client.try_release_prog_schedule_automatic(&target_program, &1);
-        assert!(blocked.is_err());
-
-        client.set_dependency_status(&dependency_program, &DependencyStatus::Completed);
-        client.release_prog_schedule_automatic(&target_program, &1);
-
-        let schedule = client.get_program_release_schedule(&target_program, &1);
-        assert!(schedule.released);
-    }
-
-    #[test]
-    #[should_panic(expected = "Dependency failed")]
-    fn test_dependency_failed_blocks_release() {
-        let env = Env::default();
-        env.mock_all_auths();
-        let contract_id = env.register_contract(None, ProgramEscrowContract);
-        let client = ProgramEscrowContractClient::new(&env, &contract_id);
-
-        let token_admin = Address::generate(&env);
-        let token_client = create_token_contract(&env, &token_admin);
-        let token_asset = token::StellarAssetClient::new(&env, &token_client.address);
-
-        let dep_backend = Address::generate(&env);
-        let target_backend = Address::generate(&env);
-        let dependency_program = String::from_str(&env, "dependency-failed");
-        let target_program = String::from_str(&env, "target-failed");
-        let winner = Address::generate(&env);
-        let amount = 5_000_000i128;
-
-        token_asset.mint(&token_admin, &amount);
-        token_client.transfer(&token_admin, &contract_id, &amount);
-
-        client.initialize_program(&dependency_program, &dep_backend, &token_client.address);
-        client.initialize_program(&target_program, &target_backend, &token_client.address);
-        client.lock_program_funds(&target_program, &amount);
-        client.create_program_release_schedule(&target_program, &amount, &1000, &winner);
-        client.set_program_dependencies(
-            &target_program,
-            &soroban_sdk::vec![&env, dependency_program.clone()],
-        );
-
-        client.set_dependency_status(&dependency_program, &DependencyStatus::Failed);
-        env.ledger().set_timestamp(1001);
-        client.release_prog_schedule_automatic(&target_program, &1);
-    }
-
-    #[test]
-    #[should_panic(expected = "Dependency cycle detected")]
-    fn test_dependency_cycle_rejection() {
-        let env = Env::default();
-        env.mock_all_auths();
-        let contract_id = env.register_contract(None, ProgramEscrowContract);
-        let client = ProgramEscrowContractClient::new(&env, &contract_id);
-
-        let backend_a = Address::generate(&env);
-        let backend_b = Address::generate(&env);
-        let token = Address::generate(&env);
-        let program_a = String::from_str(&env, "cycle-a");
-        let program_b = String::from_str(&env, "cycle-b");
-
-        client.initialize_program(&program_a, &backend_a, &token);
-        client.initialize_program(&program_b, &backend_b, &token);
-        client.set_program_dependencies(&program_a, &soroban_sdk::vec![&env, program_b.clone()]);
-        client.set_program_dependencies(&program_b, &soroban_sdk::vec![&env, program_a.clone()]);
-    }
-
-    #[test]
-    fn test_dependency_events_created_and_cleared() {
-        let env = Env::default();
-        env.mock_all_auths();
-        let contract_id = env.register_contract(None, ProgramEscrowContract);
-        let client = ProgramEscrowContractClient::new(&env, &contract_id);
-
-        let backend_a = Address::generate(&env);
-        let backend_b = Address::generate(&env);
-        let token = Address::generate(&env);
-        let program_a = String::from_str(&env, "event-a");
-        let program_b = String::from_str(&env, "event-b");
-
-        client.initialize_program(&program_a, &backend_a, &token);
-        client.initialize_program(&program_b, &backend_b, &token);
-
-        client.set_program_dependencies(&program_a, &soroban_sdk::vec![&env, program_b.clone()]);
-        let dependencies = client.get_program_dependencies(&program_a);
-        assert_eq!(dependencies.len(), 1);
-
-        client.clear_program_dependencies(&program_a);
-        let cleared_dependencies = client.get_program_dependencies(&program_a);
-        assert_eq!(cleared_dependencies.len(), 0);
-    }
-
-    // ========================================================================
-    // Fund Locking Tests
-    // ========================================================================
-
-    #[test]
-    fn test_lock_funds_single_program() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let admin = Address::generate(&env);
-        let contract_id = env.register_contract(None, ProgramEscrowContract);
-        let client = ProgramEscrowContractClient::new(&env, &contract_id);
-        let token_client = create_token_contract(&env, &admin);
-
-        let backend = Address::generate(&env);
-        let prog_id = String::from_str(&env, "Hackathon2024");
-
-        // Register program
-        client.initialize_program(&prog_id, &backend, &token_client.address);
-
-        // Lock funds
-        let amount = 10_000_0000000i128; // 10,000 USDC
-        let updated = client.lock_program_funds(&prog_id, &amount);
-
-        assert_eq!(updated.total_funds, amount);
-        assert_eq!(updated.remaining_balance, amount);
-    }
-
-    #[test]
-    fn test_lock_funds_multiple_programs_isolation() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let admin = Address::generate(&env);
-        let contract_id = env.register_contract(None, ProgramEscrowContract);
-        let client = ProgramEscrowContractClient::new(&env, &contract_id);
-        let token_client = create_token_contract(&env, &admin);
-
-        let backend1 = Address::generate(&env);
-        let backend2 = Address::generate(&env);
-
-        let prog1 = String::from_str(&env, "Program1");
-        let prog2 = String::from_str(&env, "Program2");
-
-        // Register programs
-        client.initialize_program(&prog1, &backend1, &token_client.address);
-        client.initialize_program(&prog2, &backend2, &token_client.address);
-
-        // Lock different amounts in each program
-        let amount1 = 5_000_0000000i128;
-        let amount2 = 10_000_0000000i128;
-
-        client.lock_program_funds(&prog1, &amount1);
-        client.lock_program_funds(&prog2, &amount2);
-
-        // Verify isolation - funds don't mix
-        let info1 = client.get_program_info(&prog1);
-        let info2 = client.get_program_info(&prog2);
-
-        assert_eq!(info1.total_funds, amount1);
-        assert_eq!(info1.remaining_balance, amount1);
-        assert_eq!(info2.total_funds, amount2);
-        assert_eq!(info2.remaining_balance, amount2);
-    }
-
-    #[test]
-    fn test_lock_funds_cumulative() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let admin = Address::generate(&env);
-        let contract_id = env.register_contract(None, ProgramEscrowContract);
-        let client = ProgramEscrowContractClient::new(&env, &contract_id);
-        let token_client = create_token_contract(&env, &admin);
-
-        let backend = Address::generate(&env);
-        let prog_id = String::from_str(&env, "Hackathon2024");
-
-        client.initialize_program(&prog_id, &backend, &token_client.address);
-
-        // Lock funds multiple times
-        client.lock_program_funds(&prog_id, &1_000_0000000);
-        client.lock_program_funds(&prog_id, &2_000_0000000);
-        client.lock_program_funds(&prog_id, &3_000_0000000);
-        // Write to release history
-        if let Some(s) = released_schedule {
-            let mut updated_program_data = program_data.clone();
-            updated_program_data.remaining_balance -= s.amount;
-            env.storage()
-                .instance()
-                .set(&PROGRAM_DATA, &updated_program_data);
-
-            let mut history: Vec<ProgramReleaseHistory> = env
-                .storage()
-                .instance()
-                .get(&RELEASE_HISTORY)
-                .unwrap_or_else(|| Vec::new(&env));
-            history.push_back(ProgramReleaseHistory {
-                schedule_id: s.schedule_id,
-                recipient: s.recipient,
-                amount: s.amount,
-                released_at: now,
-                release_type: ReleaseType::Automatic,
-            });
-            env.storage().instance().set(&RELEASE_HISTORY, &history);
-        }
-    }
-
-    pub fn create_pending_claim(
+pub fn create_pending_claim(
         env: Env,
         program_id: String,
         recipient: Address,
@@ -2620,8 +2360,247 @@ mod test {
     }
 }
 
+/// ============================================================================
+// Tests
+// ============================================================================
+
 #[cfg(test)]
-mod test;
+mod test {
+    use super::*;
+    use soroban_sdk::{
+        testutils::{Address as _, Ledger},
+        token, Address, Env, String,
+    };
+
+    // Test helper to create a mock token contract
+    fn create_token_contract<'a>(env: &Env, admin: &Address) -> token::Client<'a> {
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_address = token_contract.address();
+        token::Client::new(env, &token_address)
+    }
+
+    #[test]
+    #[should_panic(expected = "Program not found")]
+    fn test_get_nonexistent_program() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, ProgramEscrowContract);
+        let client = ProgramEscrowContractClient::new(&env, &contract_id);
+
+        let prog_id = String::from_str(&env, "DoesNotExist");
+        client.get_program_info();
+    }
+
+    #[test]
+    fn test_dependency_gated_release_flow() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, ProgramEscrowContract);
+        let client = ProgramEscrowContractClient::new(&env, &contract_id);
+
+        let token_admin = Address::generate(&env);
+        let token_client = create_token_contract(&env, &token_admin);
+        let token_asset = token::StellarAssetClient::new(&env, &token_client.address);
+
+        let dep_backend = Address::generate(&env);
+        let target_backend = Address::generate(&env);
+        let dependency_program = String::from_str(&env, "dependency-program");
+        let target_program = String::from_str(&env, "target-program");
+        let winner = Address::generate(&env);
+        let amount = 10_000_000i128;
+
+        token_asset.mint(&token_admin, &amount);
+        token_client.transfer(&token_admin, &contract_id, &amount);
+
+        client.initialize_program(&dependency_program, &dep_backend, &token_client.address, &Address::generate(&env), &None, &None);
+        client.initialize_program(&target_program, &target_backend, &token_client.address, &Address::generate(&env), &None, &None);
+        client.lock_program_funds(&amount);
+        client.create_program_release_schedule(&1000, &winner, &target_program, &amount);
+
+        let dependencies = soroban_sdk::vec![&env, dependency_program.clone()];
+        client.set_program_dependencies(&target_program, &dependencies);
+
+        env.ledger().set_timestamp(1001);
+        let blocked = client.try_release_prog_schedule_automatic(&1);
+        assert!(blocked.is_err());
+
+        client.set_dependency_status(&dependency_program, &DependencyStatus::Completed);
+        client.release_prog_schedule_automatic(&1);
+
+        let schedule = client.get_program_release_schedule(&1);
+        assert!(schedule.released);
+    }
+
+    #[test]
+    #[should_panic(expected = "Dependency failed")]
+    fn test_dependency_failed_blocks_release() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, ProgramEscrowContract);
+        let client = ProgramEscrowContractClient::new(&env, &contract_id);
+
+        let token_admin = Address::generate(&env);
+        let token_client = create_token_contract(&env, &token_admin);
+        let token_asset = token::StellarAssetClient::new(&env, &token_client.address);
+
+        let dep_backend = Address::generate(&env);
+        let target_backend = Address::generate(&env);
+        let dependency_program = String::from_str(&env, "dependency-failed");
+        let target_program = String::from_str(&env, "target-failed");
+        let winner = Address::generate(&env);
+        let amount = 5_000_000i128;
+
+        token_asset.mint(&token_admin, &amount);
+        token_client.transfer(&token_admin, &contract_id, &amount);
+
+        client.initialize_program(&dependency_program, &dep_backend, &token_client.address, &Address::generate(&env), &None, &None);
+        client.initialize_program(&target_program, &target_backend, &token_client.address, &Address::generate(&env), &None, &None);
+        client.lock_program_funds(&amount);
+        client.create_program_release_schedule(&1000, &winner, &target_program, &amount);
+        client.set_program_dependencies(
+            &target_program,
+            &soroban_sdk::vec![&env, dependency_program.clone()],
+        );
+
+        client.set_dependency_status(&dependency_program, &DependencyStatus::Failed);
+        env.ledger().set_timestamp(1001);
+        client.release_prog_schedule_automatic(&1);
+    }
+
+    #[test]
+    #[should_panic(expected = "Dependency cycle detected")]
+    fn test_dependency_cycle_rejection() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, ProgramEscrowContract);
+        let client = ProgramEscrowContractClient::new(&env, &contract_id);
+
+        let backend_a = Address::generate(&env);
+        let backend_b = Address::generate(&env);
+        let token = Address::generate(&env);
+        let program_a = String::from_str(&env, "cycle-a");
+        let program_b = String::from_str(&env, "cycle-b");
+
+        client.initialize_program(&program_a, &backend_a, &token, &Address::generate(&env), &None, &None);
+        client.initialize_program(&program_b, &backend_b, &token, &Address::generate(&env), &None, &None);
+        client.set_program_dependencies(&program_a, &soroban_sdk::vec![&env, program_b.clone()]);
+        client.set_program_dependencies(&program_b, &soroban_sdk::vec![&env, program_a.clone()]);
+    }
+
+    #[test]
+    fn test_dependency_events_created_and_cleared() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, ProgramEscrowContract);
+        let client = ProgramEscrowContractClient::new(&env, &contract_id);
+
+        let backend_a = Address::generate(&env);
+        let backend_b = Address::generate(&env);
+        let token = Address::generate(&env);
+        let program_a = String::from_str(&env, "event-a");
+        let program_b = String::from_str(&env, "event-b");
+
+        client.initialize_program(&program_a, &backend_a, &token, &Address::generate(&env), &None, &None);
+        client.initialize_program(&program_b, &backend_b, &token, &Address::generate(&env), &None, &None);
+
+        client.set_program_dependencies(&program_a, &soroban_sdk::vec![&env, program_b.clone()]);
+        let dependencies = client.get_program_dependencies(&program_a);
+        assert_eq!(dependencies.len(), 1);
+
+        client.clear_program_dependencies(&program_a);
+        let cleared_dependencies = client.get_program_dependencies(&program_a);
+        assert_eq!(cleared_dependencies.len(), 0);
+    }
+
+    // ========================================================================
+    // Fund Locking Tests
+    // ========================================================================
+
+    #[test]
+    fn test_lock_funds_single_program() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let admin = Address::generate(&env);
+        let contract_id = env.register_contract(None, ProgramEscrowContract);
+        let client = ProgramEscrowContractClient::new(&env, &contract_id);
+        let token_client = create_token_contract(&env, &admin);
+
+        let backend = Address::generate(&env);
+        let prog_id = String::from_str(&env, "Hackathon2024");
+
+        // Register program
+        client.initialize_program(&prog_id, &backend, &token_client.address, &Address::generate(&env), &None, &None);
+
+        // Lock funds
+        let amount = 10_000_0000000i128; // 10,000 USDC
+        let updated = client.lock_program_funds(&amount);
+
+        assert_eq!(updated.total_funds, amount);
+        assert_eq!(updated.remaining_balance, amount);
+    }
+
+    #[test]
+    fn test_lock_funds_multiple_programs_isolation() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let admin = Address::generate(&env);
+        let contract_id = env.register_contract(None, ProgramEscrowContract);
+        let client = ProgramEscrowContractClient::new(&env, &contract_id);
+        let token_client = create_token_contract(&env, &admin);
+
+        let backend1 = Address::generate(&env);
+        let backend2 = Address::generate(&env);
+
+        let prog1 = String::from_str(&env, "Program1");
+        let prog2 = String::from_str(&env, "Program2");
+
+        // Register programs
+        client.initialize_program(&prog1, &backend1, &token_client.address, &Address::generate(&env), &None, &None);
+        client.initialize_program(&prog2, &backend2, &token_client.address, &Address::generate(&env), &None, &None);
+
+        // Lock different amounts in each program
+        let amount1 = 5_000_0000000i128;
+        let amount2 = 10_000_0000000i128;
+
+        client.lock_program_funds(&amount1);
+        client.lock_program_funds(&amount2);
+
+        // Verify isolation - funds don't mix
+        let info1 = client.get_program_info();
+        let info2 = client.get_program_info();
+
+        assert_eq!(info1.total_funds, amount1);
+        assert_eq!(info1.remaining_balance, amount1);
+        assert_eq!(info2.total_funds, amount2);
+        assert_eq!(info2.remaining_balance, amount2);
+    }
+
+    #[test]
+    fn test_lock_funds_cumulative() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let admin = Address::generate(&env);
+        let contract_id = env.register_contract(None, ProgramEscrowContract);
+        let client = ProgramEscrowContractClient::new(&env, &contract_id);
+        let token_client = create_token_contract(&env, &admin);
+
+        let backend = Address::generate(&env);
+        let prog_id = String::from_str(&env, "Hackathon2024");
+
+        client.initialize_program(&prog_id, &backend, &token_client.address, &Address::generate(&env), &None, &None);
+
+        // Lock funds multiple times
+        client.lock_program_funds(&1_000_0000000);
+        client.lock_program_funds(&2_000_0000000);
+        client.lock_program_funds(&3_000_0000000);
+            }
+
+    
+}
+
+#[cfg(test)]
 
 #[cfg(test)]
 mod test_pause;

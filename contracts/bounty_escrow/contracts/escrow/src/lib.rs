@@ -2,6 +2,7 @@
 #[allow(dead_code)]
 mod events;
 mod invariants;
+mod multitoken_invariants;
 #[cfg(test)]
 mod test_metadata;
 
@@ -816,6 +817,31 @@ impl BountyEscrowContract {
             );
         }
 
+        // Zero out all active escrows to maintain INV-2 invariant.
+        // The funds have been withdrawn, so escrow records must reflect this.
+        let index: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::EscrowIndex)
+            .unwrap_or(Vec::new(&env));
+        for bounty_id in index.iter() {
+            if let Some(mut escrow) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, Escrow>(&DataKey::Escrow(bounty_id))
+            {
+                if escrow.status == EscrowStatus::Locked
+                    || escrow.status == EscrowStatus::PartiallyRefunded
+                {
+                    escrow.remaining_amount = 0;
+                    escrow.status = EscrowStatus::Refunded;
+                    env.storage()
+                        .persistent()
+                        .set(&DataKey::Escrow(bounty_id), &escrow);
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -1081,6 +1107,7 @@ impl BountyEscrowContract {
         Ok(capability)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn issue_capability(
         env: Env,
         owner: Address,
@@ -1381,6 +1408,9 @@ impl BountyEscrowContract {
             },
         );
 
+        // INV-2: Verify aggregate balance matches token balance after lock
+        multitoken_invariants::assert_after_lock(&env);
+
         Ok(())
     }
 
@@ -1447,6 +1477,9 @@ impl BountyEscrowContract {
                 timestamp: env.ledger().timestamp(),
             },
         );
+
+        // INV-2: Verify aggregate balance matches token balance after release
+        multitoken_invariants::assert_after_disbursement(&env);
 
         // Clear reentrancy guard
         env.storage().instance().remove(&DataKey::ReentrancyGuard);
@@ -2026,6 +2059,10 @@ impl BountyEscrowContract {
                 timestamp: now,
             },
         );
+
+        // INV-2: Verify aggregate balance matches token balance after refund
+        multitoken_invariants::assert_after_disbursement(&env);
+
         Ok(())
     }
 
@@ -2526,6 +2563,24 @@ impl BountyEscrowContract {
             false
         }
     }
+
+    /// Verify ALL multi-token balance invariants across every escrow (Issue #591).
+    ///
+    /// This is a view function — no state is mutated.  It checks:
+    /// - INV-1: Per-escrow sanity (amount, remaining, status consistency)
+    /// - INV-2: Sum of remaining_amount == actual token balance
+    /// - INV-4: Refund history consistency
+    /// - INV-5: Index completeness (no orphaned entries)
+    ///
+    /// Returns `true` when ALL invariants hold.
+    pub fn verify_all_invariants(env: Env) -> bool {
+        if !env.storage().instance().has(&DataKey::Admin) {
+            return false; // Not initialised
+        }
+        let report = multitoken_invariants::check_all_invariants(&env);
+        report.healthy
+    }
+
     /// Gets refund eligibility information for a bounty.
     ///
     /// # Arguments
@@ -2912,12 +2967,12 @@ impl traits::EscrowInterface for BountyEscrowContract {
 
 impl traits::UpgradeInterface for BountyEscrowContract {
     /// Get contract version
-    fn get_version(env: &Env) -> u32 {
+    fn get_version(_env: &Env) -> u32 {
         1 // Current version
     }
 
     /// Set contract version (admin only)
-    fn set_version(env: &Env, _new_version: u32) -> Result<(), soroban_sdk::String> {
+    fn set_version(_env: &Env, _new_version: u32) -> Result<(), soroban_sdk::String> {
         // Version management - reserved for future use
         // Currently, version is hardcoded to 1
         Ok(())
@@ -2952,6 +3007,8 @@ mod test_invariants;
 mod test_lifecycle;
 #[cfg(test)]
 mod test_metadata_tagging;
+#[cfg(test)]
+mod test_multitoken_invariants;
 #[cfg(test)]
 mod test_partial_payout_rounding;
 #[cfg(test)]

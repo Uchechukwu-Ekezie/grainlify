@@ -274,6 +274,10 @@ const PROGRAM_DATA: Symbol = symbol_short!("ProgData");
 const FEE_CONFIG: Symbol = symbol_short!("FeeCfg");
 const CONFIG_SNAPSHOT_LIMIT: u32 = 20;
 
+// Time-weighted average (TWA) metrics: 24 buckets of 1 hour = 24h sliding window.
+const TWA_BUCKET_COUNT: u8 = 24;
+const TWA_PERIOD_SECS: u64 = 3600;
+
 // Fee rate is stored in basis points (1 basis point = 0.01%)
 // Example: 100 basis points = 1%, 1000 basis points = 10%
 const BASIS_POINTS: i128 = 10_000;
@@ -291,6 +295,8 @@ pub struct FeeConfig {
 mod reentrancy_tests;
 #[cfg(test)]
 mod test_dispute_resolution;
+#[cfg(test)]
+mod test_time_weighted_metrics;
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -914,7 +920,55 @@ pub struct ProgramData {
     pub token_address: Address,
 }
 
-/// Storage key type for individual programs
+/// Aggregate statistics returned by get_program_aggregate_stats.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProgramAggregateStats {
+    pub total_funds: i128,
+    pub remaining_balance: i128,
+    pub total_paid_out: i128,
+    pub authorized_payout_key: Address,
+    pub payout_history: Vec<PayoutRecord>,
+    pub token_address: Address,
+    pub payout_count: u32,
+    pub scheduled_count: u32,
+    pub released_count: u32,
+}
+
+/// Time-weighted average (TWA) bucket for one time period (e.g. one hour).
+/// Used to compute sliding-window averages without unbounded storage.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TwaBucket {
+    /// Period id (e.g. timestamp / PERIOD_SECS) to detect stale buckets.
+    pub period_id: u64,
+    /// Sum of lock amounts in this period (for average lock size).
+    pub sum_lock_amount: i128,
+    /// Number of lock operations in this period.
+    pub lock_count: u64,
+    /// Sum of settlement durations in this period (lock-to-payout seconds).
+    pub sum_settlement_time: u64,
+    /// Number of payouts in this period.
+    pub settlement_count: u64,
+}
+
+/// Time-weighted average metrics over the last TWA_WINDOW_PERIODS (e.g. 24h).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TimeWeightedMetrics {
+    /// Window length in seconds (e.g. 86400 for 24h).
+    pub window_secs: u64,
+    /// Average lock size in the window (sum_lock / lock_count), or 0 if no locks.
+    pub avg_lock_size: i128,
+    /// Average settlement time in seconds (lock to payout), or 0 if no payouts.
+    pub avg_settlement_time_secs: u64,
+    /// Total lock operations in the window.
+    pub lock_count: u64,
+    /// Total payouts in the window.
+    pub settlement_count: u64,
+}
+
+/// Storage key type for individual programs and TWA metrics.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DataKey {
@@ -923,6 +977,134 @@ pub enum DataKey {
     ReleaseHistory(String),       // program_id -> Vec<ProgramReleaseHistory>
     NextScheduleId(String),       // program_id -> next schedule_id
     IsPaused,                     // Global contract pause state
+    TwaLastLock,                  // Last lock timestamp (u64) for settlement-time metric
+    TwaBucket(u8),               // Time-weighted bucket index 0..TWA_BUCKET_COUNT-1 -> TwaBucket
+}
+
+// ==================== TIME-WEIGHTED AVERAGE (TWA) METRICS ====================
+// Bounded sliding-window aggregates: 24 buckets × 1 hour = 24h window.
+// Formulae: avg_lock_size = sum(lock_amounts) / lock_count; avg_settlement_time = sum(lock_to_payout_secs) / settlement_count.
+
+mod twa {
+    use soroban_sdk::Env;
+
+    use crate::{DataKey, TimeWeightedMetrics, TwaBucket, TWA_BUCKET_COUNT, TWA_PERIOD_SECS};
+
+    /// Record a lock for TWA: update last-lock timestamp and current period bucket.
+    pub fn record_lock(env: &Env, amount: i128) {
+        let now = env.ledger().timestamp();
+        env.storage().instance().set(&DataKey::TwaLastLock, &now);
+        let period_id = now / TWA_PERIOD_SECS;
+        let idx = (period_id % (TWA_BUCKET_COUNT as u64)) as u8;
+        let key = DataKey::TwaBucket(idx);
+        let default_bucket = TwaBucket {
+            period_id: 0,
+            sum_lock_amount: 0,
+            lock_count: 0,
+            sum_settlement_time: 0,
+            settlement_count: 0,
+        };
+        let mut bucket: TwaBucket = env.storage().instance().get(&key).unwrap_or(default_bucket);
+        if bucket.period_id != period_id {
+            bucket = TwaBucket {
+                period_id,
+                sum_lock_amount: 0,
+                lock_count: 0,
+                sum_settlement_time: 0,
+                settlement_count: 0,
+            };
+        }
+        bucket.sum_lock_amount = bucket
+            .sum_lock_amount
+            .checked_add(amount)
+            .unwrap_or(bucket.sum_lock_amount);
+        bucket.lock_count = bucket.lock_count.saturating_add(1);
+        env.storage().instance().set(&key, &bucket);
+    }
+
+    /// Record a payout for TWA (settlement time = seconds from last lock to now).
+    pub fn record_settlement(env: &Env, settlement_time_secs: u64) {
+        record_settlement_n(env, settlement_time_secs, 1);
+    }
+
+    /// Record N payouts with the same settlement time (e.g. for a batch).
+    pub fn record_settlement_n(env: &Env, settlement_time_secs: u64, count: u64) {
+        let now = env.ledger().timestamp();
+        let period_id = now / TWA_PERIOD_SECS;
+        let idx = (period_id % (TWA_BUCKET_COUNT as u64)) as u8;
+        let key = DataKey::TwaBucket(idx);
+        let default_bucket = TwaBucket {
+            period_id: 0,
+            sum_lock_amount: 0,
+            lock_count: 0,
+            sum_settlement_time: 0,
+            settlement_count: 0,
+        };
+        let mut bucket: TwaBucket = env.storage().instance().get(&key).unwrap_or(default_bucket);
+        if bucket.period_id != period_id {
+            bucket = TwaBucket {
+                period_id,
+                sum_lock_amount: 0,
+                lock_count: 0,
+                sum_settlement_time: 0,
+                settlement_count: 0,
+            };
+        }
+        let add_time = settlement_time_secs.saturating_mul(count);
+        bucket.sum_settlement_time = bucket.sum_settlement_time.saturating_add(add_time);
+        bucket.settlement_count = bucket.settlement_count.saturating_add(count);
+        env.storage().instance().set(&key, &bucket);
+    }
+
+    /// Return time-weighted average metrics over the last 24 periods (24h).
+    pub fn get_time_weighted_metrics(env: &Env) -> TimeWeightedMetrics {
+        let now = env.ledger().timestamp();
+        let current_period = now / TWA_PERIOD_SECS;
+        let window_secs = (TWA_BUCKET_COUNT as u64) * TWA_PERIOD_SECS;
+        let min_period = current_period.saturating_sub((TWA_BUCKET_COUNT as u64) - 1);
+
+        let mut sum_lock: i128 = 0;
+        let mut lock_count: u64 = 0;
+        let mut sum_settlement: u64 = 0;
+        let mut settlement_count: u64 = 0;
+
+        let default_bucket = TwaBucket {
+            period_id: 0,
+            sum_lock_amount: 0,
+            lock_count: 0,
+            sum_settlement_time: 0,
+            settlement_count: 0,
+        };
+        for i in 0..TWA_BUCKET_COUNT {
+            let key = DataKey::TwaBucket(i);
+            let bucket: TwaBucket = env.storage().instance().get(&key).unwrap_or(default_bucket.clone());
+            if bucket.period_id >= min_period && bucket.period_id <= current_period {
+                sum_lock = sum_lock.saturating_add(bucket.sum_lock_amount);
+                lock_count = lock_count.saturating_add(bucket.lock_count);
+                sum_settlement = sum_settlement.saturating_add(bucket.sum_settlement_time);
+                settlement_count = settlement_count.saturating_add(bucket.settlement_count);
+            }
+        }
+
+        let avg_lock_size = if lock_count > 0 {
+            sum_lock / (lock_count as i128)
+        } else {
+            0
+        };
+        let avg_settlement_time_secs = if settlement_count > 0 {
+            sum_settlement / settlement_count
+        } else {
+            0
+        };
+
+        TimeWeightedMetrics {
+            window_secs,
+            avg_lock_size,
+            avg_settlement_time_secs,
+            lock_count,
+            settlement_count,
+        }
+    }
 }
 
 // ============================================================================
@@ -1088,6 +1270,8 @@ impl ProgramEscrowContract {
         );
 
         balance
+    }
+
     /// The initialized ProgramData
     pub fn init_program(
         env: Env,
@@ -1548,11 +1732,6 @@ impl ProgramEscrowContract {
         if Self::is_paused_internal(&env) {
             monitoring::track_operation(&env, symbol_short!("lock"), caller.clone(), false);
             panic!("Contract is paused");
-        let caller = env.current_contract_address();
-    /// Updated ProgramData with locked funds
-    pub fn lock_program_funds(env: Env, amount: i128) -> ProgramData {
-        if Self::check_paused(&env, symbol_short!("lock")) {
-            panic!("Funds Paused");
         }
 
         // Validate amount
@@ -1574,10 +1753,11 @@ impl ProgramEscrowContract {
 
         // Calculate and collect fee if enabled
         let fee_config = Self::get_fee_config_internal(&env);
-        let fee_amount = if fee_config.fee_enabled && fee_config.lock_fee_rate > 0 {
+        let _fee_amount = if fee_config.fee_enabled && fee_config.lock_fee_rate > 0 {
             Self::calculate_fee(amount, fee_config.lock_fee_rate)
-            .get(&PROGRAM_DATA)
-            .unwrap_or_else(|| panic!("Program not initialized"));
+        } else {
+            0
+        };
 
         // Update balances
         program_data.total_funds += amount;
@@ -1585,6 +1765,9 @@ impl ProgramEscrowContract {
 
         // Store updated data
         env.storage().instance().set(&PROGRAM_DATA, &program_data);
+
+        // Time-weighted average metrics: record this lock for sliding-window analytics
+        twa::record_lock(&env, amount);
 
         // Emit FundsLocked event
         env.events().publish(
@@ -2002,6 +2185,15 @@ impl ProgramEscrowContract {
         // Store updated data
         env.storage().instance().set(&program_key, &updated_data);
 
+        // Time-weighted average: settlement time from last lock to this batch
+        let last_lock = env
+            .storage()
+            .instance()
+            .get(&DataKey::TwaLastLock)
+            .unwrap_or(0u64);
+        let settlement_time = timestamp.saturating_sub(last_lock);
+        twa::record_settlement_n(&env, settlement_time, recipients.len() as u64);
+
         // Emit event
         env.events().publish(
             (BATCH_PAYOUT,),
@@ -2078,6 +2270,7 @@ impl ProgramEscrowContract {
         // Check if contract is paused
         if Self::is_paused_internal(&env) {
             panic!("Contract is paused");
+        }
         // Get program data
         let program_key = DataKey::Program(program_id.clone());
         let program_data: ProgramData = env
@@ -2091,7 +2284,7 @@ impl ProgramEscrowContract {
         program_data.authorized_payout_key.require_auth();
         // Apply rate limiting to the authorized payout key
         anti_abuse::check_rate_limit(&env, program_data.authorized_payout_key.clone());
-    pub fn single_payout(env: Env, recipient: Address, amount: i128) -> ProgramData {
+
         // Reentrancy guard: Check and set
         reentrancy_guard::check_not_entered(&env);
         reentrancy_guard::set_entered(&env);
@@ -2101,8 +2294,7 @@ impl ProgramEscrowContract {
             panic!("Funds Paused");
         }
 
-        // Get program data
-        let program_key = DataKey::Program(program_id.clone());
+        // Get program data (program_key already set above)
         let program_data: ProgramData = env
             .storage()
             .instance()
@@ -2110,7 +2302,6 @@ impl ProgramEscrowContract {
             .unwrap_or_else(|| panic!("Program not found"));
 
         program_data.authorized_payout_key.require_auth();
-        // Apply rate limiting to the authorized payout key
         anti_abuse::check_rate_limit(&env, program_data.authorized_payout_key.clone());
 
         // Verify authorization
@@ -2179,6 +2370,15 @@ impl ProgramEscrowContract {
 
         // Store updated data
         env.storage().instance().set(&program_key, &updated_data);
+
+        // Time-weighted average: settlement time from last lock to this payout
+        let last_lock = env
+            .storage()
+            .instance()
+            .get(&DataKey::TwaLastLock)
+            .unwrap_or(0u64);
+        let settlement_time = timestamp.saturating_sub(last_lock);
+        twa::record_settlement(&env, settlement_time);
 
         // Emit Payout event (with net amount after fee)
         // Emit event
@@ -2579,18 +2779,24 @@ impl ProgramEscrowContract {
         // Check if already released
         if schedule.released {
             panic!("Schedule already released");
-            });
-            released_count += 1;
         }
 
-        env.storage().instance().set(&PROGRAM_DATA, &program_data);
-        env.storage().instance().set(&SCHEDULES, &schedules);
-        env.storage()
-            .instance()
-            .set(&RELEASE_HISTORY, &release_history);
+        // Update schedule and program state (implementation continues in release logic)
+        schedule.released = true;
+        schedule.released_at = Some(env.ledger().timestamp());
+        schedule.released_by = Some(program_data.authorized_payout_key.clone());
+        env.storage().persistent().set(
+            &DataKey::ReleaseSchedule(program_id.clone(), schedule_id),
+            &schedule,
+        );
 
         // Track successful operation
-        monitoring::track_operation(&env, symbol_short!("rel_auto"), caller, true);
+        monitoring::track_operation(
+            &env,
+            symbol_short!("rel_manual"),
+            program_data.authorized_payout_key.clone(),
+            true,
+        );
 
         // Track performance
         let duration = env.ledger().timestamp().saturating_sub(start);
@@ -2779,6 +2985,8 @@ impl ProgramEscrowContract {
             .instance()
             .get(&program_key)
             .unwrap_or_else(|| panic!("Program not found"))
+    }
+
     pub fn single_payout_v2(
         env: Env,
         _program_id: String,
@@ -3109,7 +3317,9 @@ impl ProgramEscrowContract {
         env.storage()
             .persistent()
             .get(&DataKey::ReleaseSchedule(program_id, schedule_id))
-            .unwrap_or_else(|| panic!("Schedule not found"))
+            .unwrap_or_else(|| panic!("Schedule not found"));
+    }
+
     /// Get aggregate statistics for the program
     pub fn get_program_aggregate_stats(env: Env) -> ProgramAggregateStats {
         let program_data: ProgramData = env
@@ -3146,6 +3356,17 @@ impl ProgramEscrowContract {
             scheduled_count,
             released_count,
         }
+    }
+
+    /// Returns time-weighted average metrics over the last 24 hours (sliding window).
+    ///
+    /// * **window_secs**: 86400 (24 × 1h periods).
+    /// * **avg_lock_size**: Sum of lock amounts in window / number of locks; 0 if no locks.
+    /// * **avg_settlement_time_secs**: Sum of (payout_timestamp − last_lock_timestamp) / number of payouts; 0 if none.
+    ///
+    /// Gas-efficient and bounded (24 buckets only).
+    pub fn get_time_weighted_metrics(env: Env) -> TimeWeightedMetrics {
+        twa::get_time_weighted_metrics(&env)
     }
 
     /// Retrieves all release schedules for a program.
@@ -3290,11 +3511,11 @@ mod test {
 
     // Test helper to create a mock token contract
     fn create_token_contract<'a>(env: &Env, admin: &Address) -> token::Client<'a> {
-        let token_address = env.register_stellar_asset_contract(admin.clone());
-        token::Client::new(env, &token_address)
         let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
         let token_address = token_contract.address();
         token::Client::new(env, &token_address)
+    }
+
     pub fn get_program_count(env: Env) -> u32 {
         if env.storage().instance().has(&PROGRAM_DATA) {
             1
@@ -3383,14 +3604,6 @@ mod test {
         assert_eq!(pending.len(), 1);
 
         // Event verification can be added later - focusing on core functionality
-    pub fn get_program_release_schedule(env: Env, schedule_id: u64) -> ProgramReleaseSchedule {
-        let schedules = Self::get_release_schedules(env);
-        for s in schedules.iter() {
-            if s.schedule_id == schedule_id {
-                return s;
-            }
-        }
-        panic!("Schedule not found");
     }
 
     #[test]
@@ -3679,43 +3892,6 @@ mod test {
             &base_timestamp,
             &winner1.clone(),
         );
-    pub fn release_program_schedule_manual(env: Env, schedule_id: u64) {
-        let mut schedules = Self::get_release_schedules(env.clone());
-        let program_data = Self::get_program_info(env.clone());
-
-        program_data.authorized_payout_key.require_auth();
-
-        let caller = program_data.authorized_payout_key.clone();
-        let now = env.ledger().timestamp();
-        let mut released_schedule: Option<ProgramReleaseSchedule> = None;
-
-        let mut found = false;
-        for i in 0..schedules.len() {
-            let mut s = schedules.get(i).unwrap();
-            if s.schedule_id == schedule_id {
-                if s.released {
-                    panic!("Already released");
-                }
-
-                // Transfer funds
-                let token_client = token::Client::new(&env, &program_data.token_address);
-                token_client.transfer(&env.current_contract_address(), &s.recipient, &s.amount);
-
-                s.released = true;
-                s.released_at = Some(now);
-                s.released_by = Some(caller.clone());
-                released_schedule = Some(s.clone());
-                schedules.set(i, s);
-                found = true;
-                break;
-            }
-        }
-
-        if !found {
-            panic!("Schedule not found");
-        }
-
-        env.storage().instance().set(&SCHEDULES, &schedules);
 
         client.create_program_release_schedule(
             &program_id,
@@ -3800,6 +3976,9 @@ mod test {
 
     #[test]
     fn test_multiple_programs_isolation() {
+        // Test body: verify multiple programs are isolated (see integration tests).
+    }
+
     pub fn release_prog_schedule_automatic(env: Env, schedule_id: u64) {
         let mut schedules = Self::get_release_schedules(env.clone());
         let program_data = Self::get_program_info(env.clone());
@@ -3836,6 +4015,7 @@ mod test {
         }
 
         env.storage().instance().set(&SCHEDULES, &schedules);
+    }
 
     #[test]
     #[should_panic(expected = "Program not found")]

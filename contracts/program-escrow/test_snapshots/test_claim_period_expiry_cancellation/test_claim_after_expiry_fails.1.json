@@ -419,6 +419,12 @@
                             },
                             {
                               "key": {
+                                "symbol": "reference_hash"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
                                 "symbol": "remaining_balance"
                               },
                               "val": {
@@ -938,6 +944,7 @@
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
                 },
+                "void",
                 "void"
               ]
             }
@@ -975,6 +982,12 @@
                   "val": {
                     "string": "TestProgram2024"
                   }
+                },
+                {
+                  "key": {
+                    "symbol": "reference_hash"
+                  },
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -1061,6 +1074,12 @@
                   "val": {
                     "string": "TestProgram2024"
                   }
+                },
+                {
+                  "key": {
+                    "symbol": "reference_hash"
+                  },
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -1238,6 +1257,12 @@
                   "val": {
                     "string": "TestProgram2024"
                   }
+                },
+                {
+                  "key": {
+                    "symbol": "reference_hash"
+                  },
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -1598,7 +1623,7 @@
             "data": {
               "vec": [
                 {
-                  "string": "caught panic 'ClaimExpired' from contract function 'Symbol(obj#437)'"
+                  "string": "caught panic 'ClaimExpired' from contract function 'Symbol(obj#455)'"
                 },
                 {
                   "string": "TestProgram2024"

@@ -299,6 +299,12 @@
                             },
                             {
                               "key": {
+                                "symbol": "reference_hash"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
                                 "symbol": "remaining_balance"
                               },
                               "val": {
@@ -377,6 +383,12 @@
                               "val": {
                                 "string": "prog-b"
                               }
+                            },
+                            {
+                              "key": {
+                                "symbol": "reference_hash"
+                              },
+                              "val": "void"
                             },
                             {
                               "key": {
@@ -485,6 +497,12 @@
                     },
                     {
                       "key": {
+                        "symbol": "reference_hash"
+                      },
+                      "val": "void"
+                    },
+                    {
+                      "key": {
                         "symbol": "token_address"
                       },
                       "val": {
@@ -510,6 +528,12 @@
                       "val": {
                         "string": "prog-b"
                       }
+                    },
+                    {
+                      "key": {
+                        "symbol": "reference_hash"
+                      },
+                      "val": "void"
                     },
                     {
                       "key": {

@@ -11,12 +11,17 @@ use soroban_sdk::Env;
 #[test]
 fn test_guard_initially_not_set() {
     let env = Env::default();
+    let contract_id = env.register_contract(None, crate::ProgramEscrowContract);
+    env.as_contract(&contract_id, || {
     assert!(!is_entered(&env), "Guard should not be set initially");
-}
+
+    });}
 
 #[test]
 fn test_guard_can_be_set_and_cleared() {
     let env = Env::default();
+    let contract_id = env.register_contract(None, crate::ProgramEscrowContract);
+    env.as_contract(&contract_id, || {
 
     // Initially not set
     assert!(!is_entered(&env));
@@ -31,31 +36,40 @@ fn test_guard_can_be_set_and_cleared() {
         !is_entered(&env),
         "Guard should be cleared after clear_entered"
     );
-}
+
+    });}
 
 #[test]
 fn test_check_passes_when_not_entered() {
     let env = Env::default();
+    let contract_id = env.register_contract(None, crate::ProgramEscrowContract);
+    env.as_contract(&contract_id, || {
 
     // Should not panic
     check_not_entered(&env);
-}
+
+    });}
 
 #[test]
 #[should_panic(expected = "Reentrancy detected")]
 fn test_check_panics_when_entered() {
     let env = Env::default();
+    let contract_id = env.register_contract(None, crate::ProgramEscrowContract);
+    env.as_contract(&contract_id, || {
 
     // Set the guard
     set_entered(&env);
 
     // This should panic
     check_not_entered(&env);
-}
+
+    });}
 
 #[test]
 fn test_multiple_set_clear_cycles() {
     let env = Env::default();
+    let contract_id = env.register_contract(None, crate::ProgramEscrowContract);
+    env.as_contract(&contract_id, || {
 
     for _ in 0..5 {
         // Check passes
@@ -69,11 +83,14 @@ fn test_multiple_set_clear_cycles() {
         clear_entered(&env);
         assert!(!is_entered(&env));
     }
-}
+
+    });}
 
 #[test]
 fn test_guard_state_persistence() {
     let env = Env::default();
+    let contract_id = env.register_contract(None, crate::ProgramEscrowContract);
+    env.as_contract(&contract_id, || {
 
     // Set guard
     set_entered(&env);
@@ -87,23 +104,29 @@ fn test_guard_state_persistence() {
     clear_entered(&env);
     assert!(!is_entered(&env));
     assert!(!is_entered(&env));
-}
+
+    });}
 
 #[test]
 #[should_panic(expected = "Reentrancy detected")]
 fn test_double_set_detected() {
     let env = Env::default();
+    let contract_id = env.register_contract(None, crate::ProgramEscrowContract);
+    env.as_contract(&contract_id, || {
 
     // First set
     set_entered(&env);
 
     // Check should fail
     check_not_entered(&env);
-}
+
+    });}
 
 #[test]
 fn test_clear_when_not_set_is_safe() {
     let env = Env::default();
+    let contract_id = env.register_contract(None, crate::ProgramEscrowContract);
+    env.as_contract(&contract_id, || {
 
     // Clearing when not set should be safe
     clear_entered(&env);
@@ -112,12 +135,17 @@ fn test_clear_when_not_set_is_safe() {
     // Can still set after clearing
     set_entered(&env);
     assert!(is_entered(&env));
-}
+
+    });}
 
 #[test]
 fn test_guard_isolation_between_envs() {
     let env1 = Env::default();
     let env2 = Env::default();
+    let c1 = env1.register_contract(None, crate::ProgramEscrowContract);
+    let c2 = env2.register_contract(None, crate::ProgramEscrowContract);
+    env1.as_contract(&c1, || {
+    env2.as_contract(&c2, || {
 
     // Set guard in env1
     set_entered(&env1);
@@ -139,11 +167,15 @@ fn test_guard_isolation_between_envs() {
     // Only env1 should be cleared
     assert!(!is_entered(&env1));
     assert!(is_entered(&env2));
-}
+
+    });
+    })}
 
 #[test]
 fn test_sequential_protected_operations() {
     let env = Env::default();
+    let contract_id = env.register_contract(None, crate::ProgramEscrowContract);
+    env.as_contract(&contract_id, || {
 
     // Simulate 3 sequential protected operations
     for i in 0..3 {
@@ -170,4 +202,5 @@ fn test_sequential_protected_operations() {
             i
         );
     }
-}
+
+    });}

@@ -112,6 +112,12 @@
                     },
                     {
                       "key": {
+                        "symbol": "reference_hash"
+                      },
+                      "val": "void"
+                    },
+                    {
+                      "key": {
                         "symbol": "token_address"
                       },
                       "val": {
@@ -137,6 +143,12 @@
                       "val": {
                         "string": "same-id"
                       }
+                    },
+                    {
+                      "key": {
+                        "symbol": "reference_hash"
+                      },
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -254,6 +266,12 @@
                             },
                             {
                               "key": {
+                                "symbol": "reference_hash"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
                                 "symbol": "token_address"
                               },
                               "val": {
@@ -279,6 +297,12 @@
                               "val": {
                                 "string": "same-id"
                               }
+                            },
+                            {
+                              "key": {
+                                "symbol": "reference_hash"
+                              },
+                              "val": "void"
                             },
                             {
                               "key": {

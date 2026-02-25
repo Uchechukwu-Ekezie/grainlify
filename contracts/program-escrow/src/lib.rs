@@ -316,6 +316,7 @@ pub struct ProgramInitializedEvent {
     pub authorized_payout_key: Address,
     pub token_address: Address,
     pub total_funds: i128,
+    pub reference_hash: Option<soroban_sdk::Bytes>,
 }
 
 #[contracttype]
@@ -357,6 +358,7 @@ pub struct ProgramData {
     pub payout_history: Vec<PayoutRecord>,
     pub token_address: Address, // Token contract address for transfers
     pub initial_liquidity: i128, // Initial liquidity provided by creator
+    pub reference_hash: Option<soroban_sdk::Bytes>,
 }
 
 /// Storage key type for individual programs
@@ -463,6 +465,7 @@ pub struct ProgramInitItem {
     pub program_id: String,
     pub authorized_payout_key: Address,
     pub token_address: Address,
+    pub reference_hash: Option<soroban_sdk::Bytes>,
 }
 
 /// Maximum number of programs per batch (aligned with bounty_escrow).
@@ -517,8 +520,9 @@ impl ProgramEscrowContract {
         token_address: Address,
         creator: Address,
         initial_liquidity: Option<i128>,
+        reference_hash: Option<soroban_sdk::Bytes>,
     ) -> ProgramData {
-        Self::initialize_program(env, program_id, authorized_payout_key, token_address, creator, initial_liquidity)
+        Self::initialize_program(env, program_id, authorized_payout_key, token_address, creator, initial_liquidity, reference_hash)
     }
 
     pub fn initialize_program(
@@ -528,6 +532,7 @@ impl ProgramEscrowContract {
         token_address: Address,
         creator: Address,
         initial_liquidity: Option<i128>,
+        reference_hash: Option<soroban_sdk::Bytes>,
     ) -> ProgramData {
         // Check if program already exists
         if env.storage().instance().has(&PROGRAM_DATA) {
@@ -559,6 +564,7 @@ impl ProgramEscrowContract {
             payout_history: vec![&env],
             token_address: token_address.clone(),
             initial_liquidity: init_liquidity,
+            reference_hash: reference_hash.clone(),
         };
 
         // Store program data
@@ -580,6 +586,7 @@ impl ProgramEscrowContract {
                 authorized_payout_key,
                 token_address,
                 total_funds,
+                reference_hash,
             },
         );
 
@@ -638,6 +645,7 @@ impl ProgramEscrowContract {
                 payout_history: vec![&env],
                 token_address: token_address.clone(),
                 initial_liquidity: 0,
+                reference_hash: item.reference_hash.clone(),
             };
             let program_key = DataKey::Program(program_id.clone());
             env.storage().instance().set(&program_key, &program_data);

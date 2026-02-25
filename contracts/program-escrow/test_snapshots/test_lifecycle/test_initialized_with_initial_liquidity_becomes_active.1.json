@@ -74,7 +74,8 @@
                     "hi": 0,
                     "lo": 75000
                   }
-                }
+                },
+                "void"
               ]
             }
           },
@@ -309,6 +310,12 @@
                               "val": {
                                 "string": "hack-2026"
                               }
+                            },
+                            {
+                              "key": {
+                                "symbol": "reference_hash"
+                              },
+                              "val": "void"
                             },
                             {
                               "key": {
@@ -1077,7 +1084,8 @@
                     "hi": 0,
                     "lo": 75000
                   }
-                }
+                },
+                "void"
               ]
             }
           }
@@ -1209,6 +1217,12 @@
                 },
                 {
                   "key": {
+                    "symbol": "reference_hash"
+                  },
+                  "val": "void"
+                },
+                {
+                  "key": {
                     "symbol": "token_address"
                   },
                   "val": {
@@ -1292,6 +1306,12 @@
                   "val": {
                     "string": "hack-2026"
                   }
+                },
+                {
+                  "key": {
+                    "symbol": "reference_hash"
+                  },
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -1712,6 +1732,12 @@
                   "val": {
                     "string": "hack-2026"
                   }
+                },
+                {
+                  "key": {
+                    "symbol": "reference_hash"
+                  },
+                  "val": "void"
                 },
                 {
                   "key": {

@@ -197,6 +197,12 @@
                             },
                             {
                               "key": {
+                                "symbol": "reference_hash"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
                                 "symbol": "remaining_balance"
                               },
                               "val": {
@@ -648,6 +654,7 @@
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
                 },
+                "void",
                 "void"
               ]
             }
@@ -685,6 +692,12 @@
                   "val": {
                     "string": "hack-2026"
                   }
+                },
+                {
+                  "key": {
+                    "symbol": "reference_hash"
+                  },
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -771,6 +784,12 @@
                   "val": {
                     "string": "hack-2026"
                   }
+                },
+                {
+                  "key": {
+                    "symbol": "reference_hash"
+                  },
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -1040,6 +1059,12 @@
                 },
                 {
                   "key": {
+                    "symbol": "reference_hash"
+                  },
+                  "val": "void"
+                },
+                {
+                  "key": {
                     "symbol": "remaining_balance"
                   },
                   "val": {
@@ -1137,7 +1162,7 @@
             "data": {
               "vec": [
                 {
-                  "string": "caught panic 'Recipients and amounts vectors must have the same length' from contract function 'Symbol(obj#299)'"
+                  "string": "caught panic 'Recipients and amounts vectors must have the same length' from contract function 'Symbol(obj#311)'"
                 },
                 {
                   "vec": [

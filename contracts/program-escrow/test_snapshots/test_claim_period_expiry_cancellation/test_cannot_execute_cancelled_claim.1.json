@@ -476,6 +476,12 @@
                             },
                             {
                               "key": {
+                                "symbol": "reference_hash"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
                                 "symbol": "remaining_balance"
                               },
                               "val": {
@@ -995,6 +1001,7 @@
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
                 },
+                "void",
                 "void"
               ]
             }
@@ -1032,6 +1039,12 @@
                   "val": {
                     "string": "TestProgram2024"
                   }
+                },
+                {
+                  "key": {
+                    "symbol": "reference_hash"
+                  },
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -1118,6 +1131,12 @@
                   "val": {
                     "string": "TestProgram2024"
                   }
+                },
+                {
+                  "key": {
+                    "symbol": "reference_hash"
+                  },
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -1295,6 +1314,12 @@
                   "val": {
                     "string": "TestProgram2024"
                   }
+                },
+                {
+                  "key": {
+                    "symbol": "reference_hash"
+                  },
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -1628,7 +1653,7 @@
             "data": {
               "vec": [
                 {
-                  "string": "caught panic 'ClaimAlreadyProcessed' from contract function 'Symbol(obj#501)'"
+                  "string": "caught panic 'ClaimAlreadyProcessed' from contract function 'Symbol(obj#523)'"
                 },
                 {
                   "string": "TestProgram2024"

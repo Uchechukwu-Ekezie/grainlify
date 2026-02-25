@@ -418,6 +418,12 @@
                             },
                             {
                               "key": {
+                                "symbol": "reference_hash"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
                                 "symbol": "remaining_balance"
                               },
                               "val": {
@@ -937,6 +943,7 @@
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
                 },
+                "void",
                 "void"
               ]
             }
@@ -974,6 +981,12 @@
                   "val": {
                     "string": "TestProgram2024"
                   }
+                },
+                {
+                  "key": {
+                    "symbol": "reference_hash"
+                  },
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -1060,6 +1073,12 @@
                   "val": {
                     "string": "TestProgram2024"
                   }
+                },
+                {
+                  "key": {
+                    "symbol": "reference_hash"
+                  },
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -1237,6 +1256,12 @@
                   "val": {
                     "string": "TestProgram2024"
                   }
+                },
+                {
+                  "key": {
+                    "symbol": "reference_hash"
+                  },
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -1477,7 +1502,7 @@
             "data": {
               "vec": [
                 {
-                  "string": "caught panic 'Unauthorized: only admin can cancel claims' from contract function 'Symbol(obj#407)'"
+                  "string": "caught panic 'Unauthorized: only admin can cancel claims' from contract function 'Symbol(obj#425)'"
                 },
                 {
                   "string": "TestProgram2024"

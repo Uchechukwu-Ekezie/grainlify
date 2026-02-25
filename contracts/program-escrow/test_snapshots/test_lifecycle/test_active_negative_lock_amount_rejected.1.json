@@ -91,6 +91,12 @@
                             },
                             {
                               "key": {
+                                "symbol": "reference_hash"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
                                 "symbol": "remaining_balance"
                               },
                               "val": {
@@ -204,6 +210,7 @@
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
+                "void",
                 "void"
               ]
             }
@@ -241,6 +248,12 @@
                   "val": {
                     "string": "hack-2026"
                   }
+                },
+                {
+                  "key": {
+                    "symbol": "reference_hash"
+                  },
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -330,6 +343,12 @@
                 },
                 {
                   "key": {
+                    "symbol": "reference_hash"
+                  },
+                  "val": "void"
+                },
+                {
+                  "key": {
                     "symbol": "remaining_balance"
                   },
                   "val": {
@@ -409,7 +428,7 @@
             "data": {
               "vec": [
                 {
-                  "string": "caught panic 'Amount must be greater than zero' from contract function 'Symbol(obj#69)'"
+                  "string": "caught panic 'Amount must be greater than zero' from contract function 'Symbol(obj#75)'"
                 },
                 {
                   "i128": {

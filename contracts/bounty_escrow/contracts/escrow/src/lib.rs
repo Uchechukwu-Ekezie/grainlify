@@ -1906,10 +1906,10 @@ impl BountyEscrowContract {
             env.storage()
                 .persistent()
                 .set(&DataKey::Escrow(bounty_id), &escrow);
-        } else if env
+        } else if (env
             .storage()
             .persistent()
-            .has(&DataKey::EscrowAnon(bounty_id))
+            .has(&DataKey::EscrowAnon(bounty_id)))
         {
             let mut anon: AnonymousEscrow = env
                 .storage()
@@ -1994,21 +1994,36 @@ impl BountyEscrowContract {
             payout_amount,
         )?;
 
-        let token_addr: Address = env.storage().instance().get(&DataKey::Token).unwrap();
-        let client = token::Client::new(&env, &token_addr);
-        client.transfer(
-            &env.current_contract_address(),
-            &contributor,
-            &payout_amount,
-        );
-
-        escrow.remaining_amount -= payout_amount;
-        if escrow.remaining_amount == 0 {
-            escrow.status = EscrowStatus::Released;
-        }
-        env.storage()
+        if env.storage().persistent().has(&DataKey::Escrow(bounty_id)) {
+            let mut escrow: Escrow = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Escrow(bounty_id))
+                .unwrap();
+            if escrow.status != EscrowStatus::Locked {
+                return Err(Error::FundsNotLocked);
+            }
+            if payout_amount > escrow.remaining_amount {
+                return Err(Error::InsufficientFunds);
+            }
+            let token_addr: Address = env.storage().instance().get(&DataKey::Token).unwrap();
+            let client = token::Client::new(&env, &token_addr);
+            client.transfer(
+                &env.current_contract_address(),
+                &contributor,
+                &payout_amount,
+            );
+            escrow.remaining_amount -= payout_amount;
+            if escrow.remaining_amount == 0 {
+                escrow.status = EscrowStatus::Released;
+            }
+            env.storage()
+                .persistent()
+                .set(&DataKey::Escrow(bounty_id), &escrow);
+        } else if (env
+            .storage()
             .persistent()
-            .has(&DataKey::EscrowAnon(bounty_id))
+            .has(&DataKey::EscrowAnon(bounty_id)))
         {
             let mut anon: AnonymousEscrow = env
                 .storage()
@@ -2427,21 +2442,31 @@ impl BountyEscrowContract {
             return Err(Error::InvalidAmount);
         }
 
-        // Guard: prevent overpayment — payout cannot exceed what is still owed
-        if payout_amount > escrow.remaining_amount {
-            return Err(Error::InsufficientFunds);
-        }
-
-        // Decrement remaining; this is always an exact integer subtraction — no rounding
-        escrow.remaining_amount = escrow.remaining_amount.checked_sub(payout_amount).unwrap();
-
-        // Automatically transition to Released once fully paid out
-        if escrow.remaining_amount == 0 {
-            escrow.status = EscrowStatus::Released;
-        }
-        env.storage()
+        if env.storage().persistent().has(&DataKey::Escrow(bounty_id)) {
+            let mut escrow: Escrow = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Escrow(bounty_id))
+                .unwrap();
+            if escrow.status != EscrowStatus::Locked {
+                reentrancy_guard::release(&env);
+                return Err(Error::FundsNotLocked);
+            }
+            if payout_amount > escrow.remaining_amount {
+                reentrancy_guard::release(&env);
+                return Err(Error::InsufficientFunds);
+            }
+            escrow.remaining_amount = escrow.remaining_amount.checked_sub(payout_amount).unwrap();
+            if escrow.remaining_amount == 0 {
+                escrow.status = EscrowStatus::Released;
+            }
+            env.storage()
+                .persistent()
+                .set(&DataKey::Escrow(bounty_id), &escrow);
+        } else if (env
+            .storage()
             .persistent()
-            .has(&DataKey::EscrowAnon(bounty_id))
+            .has(&DataKey::EscrowAnon(bounty_id)))
         {
             let mut anon: AnonymousEscrow = env
                 .storage()

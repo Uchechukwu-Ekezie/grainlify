@@ -643,3 +643,41 @@ pub fn emit_address_unfrozen(env: &Env, event: AddressUnfrozenEvent) {
     let topics = (symbol_short!("addr_ufrz"),);
     env.events().publish(topics, event.clone());
 }
+
+// ------------------------------------------------------------------------
+// Settlement Grace Period Events
+// ------------------------------------------------------------------------
+
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct SettlementGracePeriodEntered {
+    pub version: u32,
+    pub bounty_id: u64,
+    pub grace_end_time: u64,
+    pub settlement_type: Symbol,
+    pub timestamp: u64,
+}
+
+pub fn emit_settlement_grace_period_entered(
+    env: &Env,
+    event: SettlementGracePeriodEntered,
+) {
+    let topics = (symbol_short!("grace_in"), event.bounty_id);
+    env.events().publish(topics, event.clone());
+}
+
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct SettlementCompleted {
+    pub version: u32,
+    pub bounty_id: u64,
+    pub amount: i128,
+    pub recipient: Address,
+    pub settlement_type: Symbol,
+    pub timestamp: u64,
+}
+
+pub fn emit_settlement_completed(env: &Env, event: SettlementCompleted) {
+    let topics = (symbol_short!("settle_done"), event.bounty_id);
+    env.events().publish(topics, event.clone());
+}

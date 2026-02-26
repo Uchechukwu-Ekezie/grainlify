@@ -27,25 +27,27 @@ use events::{
     emit_bounty_initialized, emit_escrow_archived, emit_escrow_cloned, emit_escrow_frozen,
     emit_escrow_locked, emit_escrow_renewed, emit_escrow_unfrozen, emit_escrow_unlocked,
     emit_event_batch, emit_funds_locked, emit_funds_locked_anon, emit_funds_refunded,
-    emit_funds_released, emit_new_cycle_created, emit_ticket_claimed, emit_ticket_issued,
+    emit_funds_released, emit_new_cycle_created, emit_settlement_completed,
+    emit_settlement_grace_period_entered, emit_ticket_claimed, emit_ticket_issued,
     ActionSummary, AddressFrozenEvent, AddressUnfrozenEvent, BatchFundsLocked, BatchFundsReleased,
     BountyEscrowInitialized, ClaimCancelled, ClaimCreated, ClaimExecuted, EscrowArchivedEvent,
     EscrowClonedEvent, EscrowFrozenEvent, EscrowLockedEvent, EscrowRenewedEvent,
     EscrowUnfrozenEvent, EscrowUnlockedEvent, EventBatch, FundsLocked, FundsLockedAnon,
-    FundsRefunded, FundsReleased, NewCycleCreatedEvent, TicketClaimed, TicketIssued,
-    EVENT_VERSION_V2,
+    FundsRefunded, FundsReleased, NewCycleCreatedEvent, SettlementCompleted,
+    SettlementGracePeriodEntered, TicketClaimed, TicketIssued, EVENT_VERSION_V2,
     emit_batch_funds_locked, emit_batch_funds_released, emit_bounty_initialized, emit_funds_locked,
     emit_funds_locked_anon, emit_funds_refunded, emit_funds_released, emit_operation_receipt,
-    emit_ticket_claimed, emit_ticket_issued, BatchFundsLocked, BatchFundsReleased, BountyEscrowInitialized,
+    emit_settlement_completed, emit_settlement_grace_period_entered, emit_ticket_claimed,
+    emit_ticket_issued, BatchFundsLocked, BatchFundsReleased, BountyEscrowInitialized,
     ClaimCancelled, ClaimCreated, ClaimExecuted, CriticalOperationOutcome, CriticalOperationReceipt,
-    FundsLocked, FundsLockedAnon, FundsRefunded, FundsReleased, TicketClaimed, TicketIssued,
-    EVENT_VERSION_V2,
+    FundsLocked, FundsLockedAnon, FundsRefunded, FundsReleased, SettlementCompleted,
+    SettlementGracePeriodEntered, TicketClaimed, TicketIssued, EVENT_VERSION_V2,
     emit_funds_locked_anon, emit_funds_refunded, emit_funds_released, emit_ticket_claimed,
     emit_ticket_issued, emit_treasury_distribution, emit_treasury_distribution_updated,
     BatchFundsLocked, BatchFundsReleased, BountyEscrowInitialized,
     ClaimCancelled, ClaimCreated, ClaimExecuted, FundsLocked, FundsLockedAnon, FundsRefunded,
-    FundsReleased, TicketClaimed, TicketIssued, TreasuryDistribution, TreasuryDistributionDetail,
-    TreasuryDistributionUpdated, EVENT_VERSION_V2,
+    FundsReleased, SettlementCompleted, SettlementGracePeriodEntered, TicketClaimed, TicketIssued,
+    TreasuryDistribution, TreasuryDistributionDetail, TreasuryDistributionUpdated, EVENT_VERSION_V2,
 };
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, token, vec, Address, BytesN,
@@ -576,6 +578,8 @@ pub enum Error {
     ScheduleAlreadyReleased = 44,
     /// Returned when attempting to release a schedule before its timestamp
     ScheduleNotDue = 45,
+    /// Returned when settlement action is blocked due to active grace period
+    GraceperiodActive = 46,
 }
 
 #[contracttype]
@@ -712,6 +716,8 @@ pub enum DataKey {
     Archived(u64),
     /// Auto-archive config (Issue #684)
     AutoArchiveConfig,
+    /// Settlement grace period configuration: global config for grace periods before auto-settlement
+    SettlementGracePeriodConfig,
 }
 
 #[contracttype]
@@ -915,6 +921,17 @@ pub struct SimulationResult {
     pub resulting_status: EscrowStatus,
     /// Remaining amount in the escrow *after* the simulated operation.
     pub remaining_amount: i128,
+}
+
+/// Configuration for settlement grace periods before automatic settlement actions
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettlementGracePeriodConfig {
+    /// Grace period in seconds after deadline before auto-settlement is allowed
+    /// Set to 0 to disable grace period and allow immediate settlement
+    pub grace_period_seconds: u64,
+    /// Whether grace periods are enabled globally
+    pub enabled: bool,
 }
 
 #[contracttype]
@@ -1924,6 +1941,41 @@ impl BountyEscrowContract {
                 bounty_id,
                 reason,
                 archived_at: now,
+            },
+        );
+        Ok(())
+    }
+
+    /// Get settlement grace period config.
+    /// Returns the configured grace period in seconds and enabled status.
+    pub fn get_settlement_grace_period_config(env: Env) -> SettlementGracePeriodConfig {
+        env.storage()
+            .instance()
+            .get(&DataKey::SettlementGracePeriodConfig)
+            .unwrap_or(SettlementGracePeriodConfig {
+                grace_period_seconds: 0,
+                enabled: false,
+            })
+    }
+
+    /// Set settlement grace period config (admin only).
+    /// Configures the grace period in seconds before automatic settlement actions are allowed.
+    /// Set grace_period_seconds to 0 and enabled to false to disable grace periods.
+    pub fn set_settlement_grace_period_config(
+        env: Env,
+        grace_period_seconds: u64,
+        enabled: bool,
+    ) -> Result<(), Error> {
+        if !env.storage().instance().has(&DataKey::Admin) {
+            return Err(Error::NotInitialized);
+        }
+        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        admin.require_auth();
+        env.storage().instance().set(
+            &DataKey::SettlementGracePeriodConfig,
+            &SettlementGracePeriodConfig {
+                grace_period_seconds,
+                enabled,
             },
         );
         Ok(())
@@ -3728,6 +3780,44 @@ impl BountyEscrowContract {
             return Err(Error::BountyNotFound);
         }
 
+        // Get grace period config
+        let grace_config: SettlementGracePeriodConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::SettlementGracePeriodConfig)
+            .unwrap_or(SettlementGracePeriodConfig {
+                grace_period_seconds: 0,
+                enabled: false,
+            });
+
+        // Check if escrow deadline has grace period applied
+        let escrow_temp: Escrow = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Escrow(bounty_id))
+            .unwrap();
+        
+        let grace_deadline = if grace_config.enabled {
+            escrow_temp.deadline.saturating_add(grace_config.grace_period_seconds)
+        } else {
+            escrow_temp.deadline
+        };
+
+        // If we're within the grace period, emit grace entered event and reject
+        if grace_config.enabled && now >= escrow_temp.deadline && now < grace_deadline {
+            emit_settlement_grace_period_entered(
+                &env,
+                SettlementGracePeriodEntered {
+                    version: EVENT_VERSION_V2,
+                    bounty_id,
+                    grace_end_time: grace_deadline,
+                    settlement_type: symbol_short!("release"),
+                    timestamp: now,
+                },
+            );
+            return Err(Error::GraceperiodActive);
+        }
+
         // GUARD: acquire reentrancy lock
         reentrancy_guard::acquire(&env);
 
@@ -3816,6 +3906,19 @@ impl BountyEscrowContract {
                 bounty_id,
                 amount: schedule.amount,
                 recipient: schedule.recipient.clone(),
+                timestamp: now,
+            },
+        );
+
+        // Emit settlement completed event
+        emit_settlement_completed(
+            &env,
+            SettlementCompleted {
+                version: EVENT_VERSION_V2,
+                bounty_id,
+                amount: schedule.amount,
+                recipient: schedule.recipient.clone(),
+                settlement_type: symbol_short!("release"),
                 timestamp: now,
             },
         );
@@ -4064,10 +4167,41 @@ impl BountyEscrowContract {
         let approval_key = DataKey::RefundApproval(bounty_id);
         let approval: Option<RefundApproval> = env.storage().persistent().get(&approval_key);
 
+        // Get grace period config
+        let grace_config: SettlementGracePeriodConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::SettlementGracePeriodConfig)
+            .unwrap_or(SettlementGracePeriodConfig {
+                grace_period_seconds: 0,
+                enabled: false,
+            });
+
+        // Calculate the deadline considering grace period
+        let grace_deadline = if grace_config.enabled {
+            escrow.deadline.saturating_add(grace_config.grace_period_seconds)
+        } else {
+            escrow.deadline
+        };
+
         // Refund is allowed if:
-        // 1. Deadline has passed (returns full amount to depositor)
+        // 1. Grace deadline has passed (returns full amount to depositor)
         // 2. An administrative approval exists (can be early, partial, and to custom recipient)
-        if now < escrow.deadline && approval.is_none() {
+        if now < grace_deadline && approval.is_none() {
+            // Check if we're in grace period and should emit event
+            if grace_config.enabled && now >= escrow.deadline && now < grace_deadline {
+                // We're in the grace period - emit grace entered event
+                emit_settlement_grace_period_entered(
+                    &env,
+                    SettlementGracePeriodEntered {
+                        version: EVENT_VERSION_V2,
+                        bounty_id,
+                        grace_end_time: grace_deadline,
+                        settlement_type: symbol_short!("refund"),
+                        timestamp: now,
+                    },
+                );
+            }
             return Err(Error::DeadlineNotPassed);
         }
 
@@ -4130,6 +4264,20 @@ impl BountyEscrowContract {
                 timestamp: now,
             },
         );
+
+        // Emit settlement completed event
+        emit_settlement_completed(
+            &env,
+            SettlementCompleted {
+                version: EVENT_VERSION_V2,
+                bounty_id,
+                amount: refund_amount,
+                recipient: refund_to.clone(),
+                settlement_type: symbol_short!("refund"),
+                timestamp: now,
+            },
+        );
+
         Self::record_receipt(
             &env,
             CriticalOperationOutcome::Refunded,
@@ -6073,6 +6221,8 @@ mod test_partial_payout_rounding;
 mod test_pause;
 #[cfg(test)]
 mod test_reentrancy_guard;
+#[cfg(test)]
+mod test_settlement_grace_periods;
 #[cfg(test)]
 mod escrow_status_transition_tests {
     use super::*;

@@ -258,6 +258,7 @@ mod claim_period;
 pub mod token_math;
 pub use claim_period::{ClaimRecord, ClaimStatus};
 mod error_recovery;
+mod threshold_monitor;
 mod reentrancy_guard;
 #[cfg(test)]
 mod test_claim_period_expiry_cancellation;

@@ -38,13 +38,7 @@ fn setup_program_with_admin<'a>(
 
     env.mock_all_auths();
     let program_id = String::from_str(env, "test-prog");
-    client.init_program(
-        &program_id,
-        &payout_key,
-        &token_client.address,
-        &admin,
-        &None,
-    );
+    client.init_program(&program_id, &payout_key, &token_client.address, &admin, &None, &None);
     (client, admin, payout_key, token_client)
 }
 
@@ -348,8 +342,8 @@ fn setup_rbac_program_env_strict<'a>(
 
     // Initialize program with operator as payout_key
     let program_id = String::from_str(env, "rbac-program");
-    contract_client.init_program(&program_id, &operator, &token_address, &admin, &None);
-
+    contract_client.init_program(&program_id, &operator, &token_address, &admin, &None, &None);
+    
     // Mint and lock funds
     let depositor = Address::generate(env);
     token_admin_client.mint(&depositor, &1000);
@@ -390,8 +384,8 @@ fn setup_rbac_program_env<'a>(
 
     // Initialize program with operator as payout_key
     let program_id = String::from_str(env, "rbac-program");
-    contract_client.init_program(&program_id, &operator, &token_address, &admin, &None);
-
+    contract_client.init_program(&program_id, &operator, &token_address, &admin, &None, &None);
+    
     // Mint and lock funds
     let depositor = Address::generate(env);
     token_admin_client.mint(&depositor, &1000);
@@ -574,12 +568,13 @@ fn test_rbac_emergency_withdraw_drains_all_funds() {
     contract_client.initialize_contract(&admin);
 
     // Initialize multiple programs
+    // NOTE: Contract currently only supports one program per instance
     let program_id_1 = String::from_str(&env, "prog-1");
-    contract_client.init_program(&program_id_1, &operator, &token_address, &admin, &None);
-
-    let program_id_2 = String::from_str(&env, "prog-2");
-    contract_client.init_program(&program_id_2, &operator, &token_address, &admin, &None);
-
+    contract_client.init_program(&program_id_1, &operator, &token_address, &admin, &None, &None);
+    
+    // let program_id_2 = String::from_str(&env, "prog-2");
+    // contract_client.init_program(&program_id_2, &operator, &token_address, &admin, &None, &None);
+    
     // Mint and distribute funds to programs
     let depositor = Address::generate(&env);
     token_admin_client.mint(&depositor, &3000);
@@ -629,6 +624,12 @@ fn test_rbac_after_emergency_withdraw_can_unpause_and_reuse() {
     );
 
     // Verify contract can be reused (balance is 0 now but lock should work)
+    // We need to mint tokens to the contract first since lock_program_funds doesn't transfer them from caller
+    let token_admin = Address::generate(&env);
+    let token_sac = token::StellarAssetClient::new(&env, &token_client.address);
+    env.mock_all_auths();
+    token_sac.mint(&contract_client.address, &200);
+
     contract_client.lock_program_funds(&200);
     // Note: this will fail since we drained the contract, but the point is
     // that the pause check passes

@@ -1,4 +1,5 @@
 #![cfg(test)]
+#![allow(unused)]
 
 //! Backwards Compatibility Tests
 //!
@@ -97,6 +98,10 @@ fn test_storage_keys_accessible() {
     client.init(&admin, &token);
     token_admin_client.mint(&depositor, &1000);
     client.lock_funds(&depositor, &1, &1000, &100);
+
+    // Verify we can still access stored data
+    let escrow = client.get_escrow_info(&1);
+    assert_eq!(escrow.amount, 1000);
 
     // Verify we can still access stored data
     let escrow = client.get_escrow_info(&1);

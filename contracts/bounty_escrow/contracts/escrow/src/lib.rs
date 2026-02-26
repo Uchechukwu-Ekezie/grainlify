@@ -5048,5 +5048,3 @@ mod test_query_filters;
 mod test_receipts;
 #[cfg(test)]
 mod test_status_transitions;
-#[cfg(test)]
-mod test_receipts;

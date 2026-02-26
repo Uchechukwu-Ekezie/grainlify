@@ -540,6 +540,18 @@
                         "val": {
                           "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                         }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "ReceiptCounter"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "u64": 2
+                        }
                       }
                     ]
                   }
@@ -1042,6 +1054,14 @@
                 },
                 {
                   "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 1
+                  }
+                },
+                {
+                  "key": {
                     "symbol": "reference_hash"
                   },
                   "val": "void"
@@ -1235,6 +1255,14 @@
                   },
                   "val": {
                     "string": "TestProgram2024"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 2
                   }
                 },
                 {
@@ -1653,7 +1681,7 @@
             "data": {
               "vec": [
                 {
-                  "string": "caught panic 'ClaimAlreadyProcessed' from contract function 'Symbol(obj#523)'"
+                  "string": "caught panic 'ClaimAlreadyProcessed' from contract function 'Symbol(obj#559)'"
                 },
                 {
                   "string": "TestProgram2024"

@@ -48,7 +48,7 @@ fn test_complex_multi_program_lifecycle_integration() {
     // ── Phase 1: Registration (Multi-tenant) ───────────────────────────
     // Init Program A
     client.init_program(&prog_id_a, &admin_a, &token_id, &creator, &None, &None);
-    
+
     // Init Program B
     // Note: The current implementation seems to only support one program per contract instance
     // based on 'PROGRAM_DATA' being a single Symbol key in 'lib.rs'.

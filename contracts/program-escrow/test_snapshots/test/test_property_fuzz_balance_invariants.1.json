@@ -4497,6 +4497,18 @@
                         "val": {
                           "vec": []
                         }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "ReceiptCounter"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "u64": 42
+                        }
                       }
                     ]
                   }
@@ -12103,6 +12115,14 @@
                 },
                 {
                   "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 1
+                  }
+                },
+                {
+                  "key": {
                     "symbol": "reference_hash"
                   },
                   "val": "void"
@@ -12385,6 +12405,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 2
                   }
                 },
                 {
@@ -12765,6 +12793,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 3
                   }
                 },
                 {
@@ -13329,6 +13365,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 4
                   }
                 },
                 {
@@ -13955,6 +13999,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 5
                   }
                 },
                 {
@@ -14643,6 +14695,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 6
                   }
                 },
                 {
@@ -15393,6 +15453,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 7
                   }
                 },
                 {
@@ -16205,6 +16273,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 8
                   }
                 },
                 {
@@ -17079,6 +17155,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 9
                   }
                 },
                 {
@@ -18015,6 +18099,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 10
                   }
                 },
                 {
@@ -19013,6 +19105,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 11
                   }
                 },
                 {
@@ -20073,6 +20173,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 12
                   }
                 },
                 {
@@ -21195,6 +21303,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 13
                   }
                 },
                 {
@@ -22379,6 +22495,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 14
                   }
                 },
                 {
@@ -23625,6 +23749,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 15
                   }
                 },
                 {
@@ -24933,6 +25065,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 16
                   }
                 },
                 {
@@ -26303,6 +26443,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 17
                   }
                 },
                 {
@@ -27735,6 +27883,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 18
                   }
                 },
                 {
@@ -29229,6 +29385,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 19
                   }
                 },
                 {
@@ -30785,6 +30949,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 20
                   }
                 },
                 {
@@ -32403,6 +32575,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 21
                   }
                 },
                 {
@@ -34083,6 +34263,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 22
                   }
                 },
                 {
@@ -35825,6 +36013,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 23
                   }
                 },
                 {
@@ -37629,6 +37825,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 24
                   }
                 },
                 {
@@ -39495,6 +39699,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 25
                   }
                 },
                 {
@@ -41423,6 +41635,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 26
                   }
                 },
                 {
@@ -43413,6 +43633,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 27
                   }
                 },
                 {
@@ -45465,6 +45693,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 28
                   }
                 },
                 {
@@ -47579,6 +47815,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 29
                   }
                 },
                 {
@@ -49755,6 +49999,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 30
                   }
                 },
                 {
@@ -51993,6 +52245,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 31
                   }
                 },
                 {
@@ -54293,6 +54553,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 32
                   }
                 },
                 {
@@ -56655,6 +56923,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 33
                   }
                 },
                 {
@@ -59079,6 +59355,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 34
                   }
                 },
                 {
@@ -61565,6 +61849,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 35
                   }
                 },
                 {
@@ -64113,6 +64405,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 36
                   }
                 },
                 {
@@ -66723,6 +67023,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 37
                   }
                 },
                 {
@@ -69395,6 +69703,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 38
                   }
                 },
                 {
@@ -72129,6 +72445,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 39
                   }
                 },
                 {
@@ -74925,6 +75249,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 40
                   }
                 },
                 {
@@ -77783,6 +78115,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 41
                   }
                 },
                 {
@@ -80703,6 +81043,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 42
                   }
                 },
                 {

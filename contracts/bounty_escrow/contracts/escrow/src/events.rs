@@ -466,6 +466,30 @@ pub fn emit_capability_revoked(env: &Env, event: CapabilityRevoked) {
     env.events().publish(topics, event);
 }
 
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MetadataUpdated {
+    pub bounty_id: u64,
+    pub repo_id: u64,
+    pub issue_id: u64,
+    pub bounty_type: soroban_sdk::String,
+    pub reference_hash: Option<soroban_sdk::Bytes>,
+    pub timestamp: u64,
+}
+
+pub fn emit_metadata_updated(env: &Env, bounty_id: u64, metadata: crate::EscrowMetadata) {
+    let topics = (symbol_short!("meta_upd"), bounty_id);
+    let event = MetadataUpdated {
+        bounty_id,
+        repo_id: metadata.repo_id,
+        issue_id: metadata.issue_id,
+        bounty_type: metadata.bounty_type,
+        reference_hash: metadata.reference_hash,
+        timestamp: env.ledger().timestamp(),
+    };
+    env.events().publish(topics, event);
+}
+
 // ==================== Event Batching (Issue #676) ====================
 // Compact action summary for batch events. Indexers can decode a single
 // EventBatch instead of N individual events during high-volume periods.

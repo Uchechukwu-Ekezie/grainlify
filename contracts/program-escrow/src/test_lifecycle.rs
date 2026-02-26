@@ -882,7 +882,14 @@ fn test_initialized_with_initial_liquidity_becomes_active() {
     token_sac.mint(&creator, &75_000);
 
     let program_id = String::from_str(&env, "hack-2026");
-    let data = client.init_program(&program_id, &admin, &token_id, &creator, &Some(75_000), &None);
+    let data = client.init_program(
+        &program_id,
+        &admin,
+        &token_id,
+        &creator,
+        &Some(75_000),
+        &None,
+    );
 
     // Program starts directly Active with funded balance
     assert_eq!(data.total_funds, 75_000);
@@ -953,7 +960,14 @@ fn test_drained_double_init_still_rejected() {
     let new_admin = Address::generate(&env);
     let new_token = Address::generate(&env);
     let program_id = String::from_str(&env, "hack-2026-v2");
-    client.init_program(&program_id, &new_admin, &new_token, &new_admin, &None, &None);
+    client.init_program(
+        &program_id,
+        &new_admin,
+        &new_token,
+        &new_admin,
+        &None,
+        &None,
+    );
 }
 
 // ---------------------------------------------------------------------------

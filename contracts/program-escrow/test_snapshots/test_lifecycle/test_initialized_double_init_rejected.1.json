@@ -143,6 +143,18 @@
                         "val": {
                           "vec": []
                         }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "ReceiptCounter"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "u64": 1
+                        }
                       }
                     ]
                   }
@@ -247,6 +259,14 @@
                   },
                   "val": {
                     "string": "hack-2026"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 1
                   }
                 },
                 {
@@ -440,7 +460,7 @@
             "data": {
               "vec": [
                 {
-                  "string": "caught panic 'Program already initialized' from contract function 'Symbol(obj#75)'"
+                  "string": "caught panic 'Program already initialized' from contract function 'Symbol(obj#85)'"
                 },
                 {
                   "string": "hack-2026"

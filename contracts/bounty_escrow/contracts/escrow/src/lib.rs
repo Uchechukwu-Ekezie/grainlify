@@ -584,6 +584,7 @@ pub struct EscrowMetadata {
     pub repo_id: u64,
     pub issue_id: u64,
     pub bounty_type: soroban_sdk::String,
+    pub reference_hash: Option<soroban_sdk::Bytes>,
 }
 
 #[contracttype]
@@ -5582,6 +5583,7 @@ impl BountyEscrowContract {
         repo_id: u64,
         issue_id: u64,
         bounty_type: soroban_sdk::String,
+        reference_hash: Option<soroban_sdk::Bytes>,
     ) -> Result<(), Error> {
         let stored_admin: Address = env
             .storage()
@@ -5594,10 +5596,14 @@ impl BountyEscrowContract {
             repo_id,
             issue_id,
             bounty_type,
+            reference_hash,
         };
         env.storage()
             .persistent()
             .set(&DataKey::Metadata(bounty_id), &metadata);
+
+        // Emit update event
+        events::emit_metadata_updated(&env, bounty_id, metadata.clone());
         Ok(())
     }
 

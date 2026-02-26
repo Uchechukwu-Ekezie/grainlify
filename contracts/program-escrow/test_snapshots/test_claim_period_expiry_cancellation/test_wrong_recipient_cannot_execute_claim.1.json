@@ -482,6 +482,18 @@
                         "val": {
                           "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                         }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "ReceiptCounter"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "u64": 2
+                        }
                       }
                     ]
                   }
@@ -984,6 +996,14 @@
                 },
                 {
                   "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 1
+                  }
+                },
+                {
+                  "key": {
                     "symbol": "reference_hash"
                   },
                   "val": "void"
@@ -1177,6 +1197,14 @@
                   },
                   "val": {
                     "string": "TestProgram2024"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "receipt_id"
+                  },
+                  "val": {
+                    "u64": 2
                   }
                 },
                 {
@@ -1502,7 +1530,7 @@
             "data": {
               "vec": [
                 {
-                  "string": "caught panic 'Unauthorized: only the claim recipient can execute this claim' from contract function 'Symbol(obj#425)'"
+                  "string": "caught panic 'Unauthorized: only the claim recipient can execute this claim' from contract function 'Symbol(obj#457)'"
                 },
                 {
                   "string": "TestProgram2024"

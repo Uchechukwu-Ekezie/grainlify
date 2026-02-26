@@ -935,50 +935,6 @@ pub struct ProgramScheduleReleased {
     pub released_by: Address,
     pub release_type: ReleaseType,
 }
-
-/// Complete program state and configuration.
-///
-/// # Fields
-/// * `program_id` - Unique identifier for the program/hackathon
-/// * `total_funds` - Total amount of funds locked (cumulative)
-/// * `remaining_balance` - Current available balance for payouts
-/// * `authorized_payout_key` - Address authorized to trigger payouts
-/// * `payout_history` - Complete record of all payouts
-/// * `token_address` - Token contract used for transfers
-///
-/// # Storage
-/// Stored in instance storage with key `PROGRAM_DATA`.
-///
-/// # Invariants
-/// - `remaining_balance <= total_funds` (always)
-/// - `remaining_balance = total_funds - sum(payout_history.amounts)`
-/// - `payout_history` is append-only
-/// - `program_id` and `authorized_payout_key` are immutable after init
-///
-/// # Example
-/// ```rust
-/// let program_data = ProgramData {
-///     program_id: String::from_str(&env, "Hackathon2024"),
-///     total_funds: 10_000_0000000,
-///     remaining_balance: 7_000_0000000,
-///     authorized_payout_key: backend_address,
-///     payout_history: vec![&env],
-///     token_address: usdc_token_address,
-/// };
-/// ```
-
-/// Complete program state and configuration.
-///
-/// # Storage Key
-/// Stored with key: `("Program", program_id)`
-///
-/// # Invariants
-/// - `remaining_balance <= total_funds` (always)
-/// - `remaining_balance = total_funds - sum(payout_history.amounts)`
-/// - `payout_history` is append-only
-/// - `program_id` and `authorized_payout_key` are immutable after registration
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
 #[contract]
 pub struct ProgramEscrowContract;
 
@@ -2000,6 +1956,12 @@ impl ProgramEscrowContract {
             &program_data.token_address,
             amount,
         );
+
+        // Check circuit breaker with thresholds
+        if let Err(_) = error_recovery::check_and_allow_with_thresholds(&env) {
+            reentrancy_guard::clear_entered(&env);
+            panic!("Circuit breaker open or threshold breached");
+        }
         // Validate amount
         if amount <= 0 {
             panic!("Amount must be greater than zero");
@@ -3262,6 +3224,7 @@ fn get_program_total_scheduled_amount(env: &Env, program_id: &String) -> i128 {
                 total += schedule.amount;
             }
         }
+    }
     total
 }
 
@@ -3269,6 +3232,7 @@ fn get_program_total_scheduled_amount(env: &Env, program_id: &String) -> i128 {
 // Program Registration Tests
 // ========================================================================
 
+#[cfg(test)]
 mod test_reputation;
 
 #[cfg(test)]

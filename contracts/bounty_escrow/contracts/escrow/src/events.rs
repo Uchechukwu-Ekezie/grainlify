@@ -455,3 +455,59 @@ pub fn emit_new_cycle_created(env: &Env, event: NewCycleCreatedEvent) {
     let topics = (symbol_short!("new_cyc"), event.new_bounty_id);
     env.events().publish(topics, event.clone());
 }
+
+// ==================== Frozen Balance (Issue #578) ====================
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EscrowFrozenEvent {
+    pub bounty_id: u64,
+    pub frozen_by: Address,
+    pub reason: Option<soroban_sdk::String>,
+    pub frozen_at: u64,
+}
+
+pub fn emit_escrow_frozen(env: &Env, event: EscrowFrozenEvent) {
+    let topics = (symbol_short!("esc_frz"), event.bounty_id);
+    env.events().publish(topics, event.clone());
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EscrowUnfrozenEvent {
+    pub bounty_id: u64,
+    pub unfrozen_by: Address,
+    pub unfrozen_at: u64,
+}
+
+pub fn emit_escrow_unfrozen(env: &Env, event: EscrowUnfrozenEvent) {
+    let topics = (symbol_short!("esc_ufrz"), event.bounty_id);
+    env.events().publish(topics, event.clone());
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AddressFrozenEvent {
+    pub address: Address,
+    pub frozen_by: Address,
+    pub reason: Option<soroban_sdk::String>,
+    pub frozen_at: u64,
+}
+
+pub fn emit_address_frozen(env: &Env, event: AddressFrozenEvent) {
+    let topics = (symbol_short!("addr_frz"),);
+    env.events().publish(topics, event.clone());
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AddressUnfrozenEvent {
+    pub address: Address,
+    pub unfrozen_by: Address,
+    pub unfrozen_at: u64,
+}
+
+pub fn emit_address_unfrozen(env: &Env, event: AddressUnfrozenEvent) {
+    let topics = (symbol_short!("addr_ufrz"),);
+    env.events().publish(topics, event.clone());
+}

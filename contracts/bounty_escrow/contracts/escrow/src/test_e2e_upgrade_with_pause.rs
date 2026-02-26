@@ -7,47 +7,76 @@
 
 use crate::{BountyEscrowContract, BountyEscrowContractClient, Error, EscrowStatus};
 use soroban_sdk::{
-    testutils::{Address as _, Events, Ledger},
+    testutils::{Address as _, Events},
     token, Address, Env, String as SorobanString,
 };
 
+// No lifetime needed: returns only the Address; clients are created on demand.
+fn setup_token(env: &Env, admin: &Address) -> Address {
+    env.register_stellar_asset_contract_v2(admin.clone())
+        .address()
+}
+
+// No lifetime on the struct: token clients are created on demand from self.env.
+struct TestContext {
+fn create_token_contract<'a>(
+    e: &'a Env,
+    admin: &Address,
+) -> (Address, token::Client<'a>, token::StellarAssetClient<'a>) {
+    let token_contract = e.register_stellar_asset_contract_v2(admin.clone());
+    let token = token_contract.address();
+    let token_client = token::Client::new(e, &token);
+    let token_admin_client = token::StellarAssetClient::new(e, &token);
+    (token, token_client, token_admin_client)
+}
+
 struct TestContext<'a> {
     env: Env,
-    client: BountyEscrowContractClient<'a>,
-    token_client: token::Client<'a>,
-    token_admin_client: token::StellarAssetClient<'a>,
+    client: BountyEscrowContractClient<'static>,
+    token_addr: Address,
     depositor: Address,
     contributor: Address,
 }
 
-impl<'a> TestContext<'a> {
+impl TestContext {
     fn new() -> Self {
         let env = Env::default();
         env.mock_all_auths();
-
-        let contract_id = env.register_contract(None, BountyEscrowContract);
-        let client = BountyEscrowContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
         let depositor = Address::generate(&env);
         let contributor = Address::generate(&env);
 
-        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
-        let token_addr = token_contract.address();
-        let token_client = token::Client::new(&env, &token_addr);
-        let token_admin_client = token::StellarAssetClient::new(&env, &token_addr);
+        let token_addr = setup_token(&env, &admin);
+
+        let contract_id = env.register_contract(None, BountyEscrowContract);
+
+        // SAFETY: the client's lifetime is tied to `contract_id` which lives in
+        // the Env. We extend to 'static here because both env and contract_id
+        // are owned by Self and will outlive any borrow of self.
+        let client = BountyEscrowContractClient::new(&env, &contract_id);
+        let client: BountyEscrowContractClient<'static> = unsafe { core::mem::transmute(client) };
 
         client.init(&admin, &token_addr);
-        token_admin_client.mint(&depositor, &2_000_000_000);
+
+        // Mint via a short-lived client — dropped immediately, no lifetime stored.
+        token::StellarAssetClient::new(&env, &token_addr).mint(&depositor, &2_000_000_000);
 
         Self {
             env,
             client,
-            token_client,
-            token_admin_client,
+            token_addr,
             depositor,
             contributor,
         }
+    }
+
+    fn token_client(&self) -> token::Client<'_> {
+        token::Client::new(&self.env, &self.token_addr)
+    }
+
+    fn token_admin_client(&self) -> token::StellarAssetClient<'_> {
+        token::StellarAssetClient::new(&self.env, &self.token_addr)
     }
 
     fn lock_bounty(&self, bounty_id: u64, amount: i128) {
@@ -57,7 +86,7 @@ impl<'a> TestContext<'a> {
     }
 
     fn contract_balance(&self) -> i128 {
-        self.token_client.balance(&self.client.address)
+        self.token_client().balance(&self.client.address)
     }
 }
 
@@ -104,7 +133,7 @@ fn test_e2e_pause_upgrade_resume_with_funds() {
     let escrow = ctx.client.get_escrow_info(&bounty_id);
     assert_eq!(escrow.status, EscrowStatus::Released);
     assert_eq!(ctx.contract_balance(), 0);
-    assert_eq!(ctx.token_client.balance(&ctx.contributor), amount);
+    assert_eq!(ctx.token_client().balance(&ctx.contributor), amount);
 }
 
 #[test]
@@ -146,7 +175,7 @@ fn test_e2e_emergency_withdraw_requires_pause() {
     ctx.client.emergency_withdraw(&target);
 
     assert_eq!(ctx.contract_balance(), 0);
-    assert_eq!(ctx.token_client.balance(&target), 10_000);
+    assert_eq!(ctx.token_client().balance(&target), 10_000);
 }
 
 #[test]
@@ -197,7 +226,7 @@ fn test_e2e_upgrade_with_high_value_bounties() {
     let ctx = TestContext::new();
     let high_value = 100_000_000i128;
 
-    ctx.token_admin_client
+    ctx.token_admin_client()
         .mint(&ctx.depositor, &(high_value * 3i128));
     ctx.lock_bounty(11, high_value);
     ctx.lock_bounty(12, high_value);

@@ -348,7 +348,8 @@ mod monitoring {
         }
     }
 
-    // Get performance stats
+    // Get performance stats (e.g. for off-chain analytics)
+    #[allow(dead_code)]
     pub fn get_performance_stats(env: &Env, function_name: Symbol) -> PerformanceStats {
         let count_key = (Symbol::new(env, "perf_cnt"), function_name.clone());
         let time_key = (Symbol::new(env, "perf_time"), function_name.clone());

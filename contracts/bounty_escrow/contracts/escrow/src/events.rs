@@ -1,5 +1,5 @@
 use crate::{CapabilityAction, DisputeOutcome, DisputeReason};
-use soroban_sdk::{contracttype, symbol_short, Address, Env};
+use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env};
 
 pub const EVENT_VERSION_V2: u32 = 2;
 
@@ -32,6 +32,22 @@ pub fn emit_funds_locked(env: &Env, event: FundsLocked) {
     env.events().publish(topics, event.clone());
 }
 
+/// Event for anonymous lock: only depositor commitment is emitted (no plaintext address).
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct FundsLockedAnon {
+    pub version: u32,
+    pub bounty_id: u64,
+    pub amount: i128,
+    pub depositor_commitment: BytesN<32>,
+    pub deadline: u64,
+}
+
+pub fn emit_funds_locked_anon(env: &Env, event: FundsLockedAnon) {
+    let topics = (symbol_short!("lock_anon"), event.bounty_id);
+    env.events().publish(topics, event.clone());
+}
+
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct FundsReleased {
@@ -44,6 +60,44 @@ pub struct FundsReleased {
 
 pub fn emit_funds_released(env: &Env, event: FundsReleased) {
     let topics = (symbol_short!("f_rel"), event.bounty_id);
+    env.events().publish(topics, event.clone());
+}
+
+// ------------------------------------------------------------------------
+// Scheduled release events
+// ------------------------------------------------------------------------
+
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct ScheduleCreated {
+    pub bounty_id: u64,
+    pub schedule_id: u64,
+    pub amount: i128,
+    pub recipient: Address,
+    pub release_timestamp: u64,
+    pub created_by: Address,
+    pub timestamp: u64,
+}
+
+pub fn emit_schedule_created(env: &Env, event: ScheduleCreated) {
+    let topics = (symbol_short!("sch_cr"), event.bounty_id, event.schedule_id);
+    env.events().publish(topics, event.clone());
+}
+
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct ScheduleReleased {
+    pub bounty_id: u64,
+    pub schedule_id: u64,
+    pub amount: i128,
+    pub recipient: Address,
+    pub released_at: u64,
+    pub released_by: Address,
+    pub release_type: crate::ReleaseType,
+}
+
+pub fn emit_schedule_released(env: &Env, event: ScheduleReleased) {
+    let topics = (symbol_short!("sch_rel"), event.bounty_id, event.schedule_id);
     env.events().publish(topics, event.clone());
 }
 
@@ -60,6 +114,43 @@ pub struct FundsRefunded {
 pub fn emit_funds_refunded(env: &Env, event: FundsRefunded) {
     let topics = (symbol_short!("f_ref"), event.bounty_id);
     env.events().publish(topics, event.clone());
+}
+
+// ============================================================================
+// Optional require-receipt for critical operations (Issue #677)
+// ============================================================================
+
+/// Outcome of a critical operation for receipt proof.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CriticalOperationOutcome {
+    Released,
+    Refunded,
+}
+
+/// Receipt (signed/committed proof of execution) for release or refund.
+/// Emitted for each release/refund so users can prove completion off-chain;
+/// optional on-chain verification via verify_receipt(receipt_id).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CriticalOperationReceipt {
+    /// Unique receipt id (monotonic counter).
+    pub receipt_id: u64,
+    /// Operation that was executed.
+    pub outcome: CriticalOperationOutcome,
+    /// Bounty that was released or refunded.
+    pub bounty_id: u64,
+    /// Amount transferred.
+    pub amount: i128,
+    /// Recipient (release) or refund_to (refund).
+    pub party: Address,
+    /// Ledger timestamp when the operation completed.
+    pub timestamp: u64,
+}
+
+pub fn emit_operation_receipt(env: &Env, receipt: CriticalOperationReceipt) {
+    let topics = (symbol_short!("receipt"), receipt.receipt_id);
+    env.events().publish(topics, receipt.clone());
 }
 
 #[contracttype]
@@ -111,6 +202,47 @@ pub struct FeeConfigUpdated {
 
 pub fn emit_fee_config_updated(env: &Env, event: FeeConfigUpdated) {
     let topics = (symbol_short!("fee_cfg"),);
+    env.events().publish(topics, event.clone());
+}
+
+/// Event emitted when treasury destinations are updated
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct TreasuryDistributionUpdated {
+    pub destinations_count: u32,
+    pub total_weight: u32,
+    pub distribution_enabled: bool,
+    pub timestamp: u64,
+}
+
+pub fn emit_treasury_distribution_updated(env: &Env, event: TreasuryDistributionUpdated) {
+    let topics = (symbol_short!("treasury_cfg"),);
+    env.events().publish(topics, event.clone());
+}
+
+/// Event emitted when fees are distributed to treasury destinations
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct TreasuryDistribution {
+    pub version: u32,
+    pub operation_type: FeeOperationType,
+    pub total_amount: i128,
+    pub distributions: Vec<TreasuryDistributionDetail>,
+    pub timestamp: u64,
+}
+
+/// Detail for a single treasury distribution
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct TreasuryDistributionDetail {
+    pub destination_address: Address,
+    pub region: String,
+    pub amount: i128,
+    pub weight: u32,
+}
+
+pub fn emit_treasury_distribution(env: &Env, event: TreasuryDistribution) {
+    let topics = (symbol_short!("treasury_dist"),);
     env.events().publish(topics, event.clone());
 }
 
@@ -479,4 +611,59 @@ pub fn emit_new_cycle_created(env: &Env, event: NewCycleCreatedEvent) {
     let topics = (symbol_short!("new_cyc"), event.new_bounty_id);
     env.events().publish(topics, event.clone());
 }
+
+// ==================== Frozen Balance (Issue #578) ====================
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EscrowFrozenEvent {
+    pub bounty_id: u64,
+    pub frozen_by: Address,
+    pub reason: Option<soroban_sdk::String>,
+    pub frozen_at: u64,
+}
+
+pub fn emit_escrow_frozen(env: &Env, event: EscrowFrozenEvent) {
+    let topics = (symbol_short!("esc_frz"), event.bounty_id);
+    env.events().publish(topics, event.clone());
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EscrowUnfrozenEvent {
+    pub bounty_id: u64,
+    pub unfrozen_by: Address,
+    pub unfrozen_at: u64,
+}
+
+pub fn emit_escrow_unfrozen(env: &Env, event: EscrowUnfrozenEvent) {
+    let topics = (symbol_short!("esc_ufrz"), event.bounty_id);
+    env.events().publish(topics, event.clone());
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AddressFrozenEvent {
+    pub address: Address,
+    pub frozen_by: Address,
+    pub reason: Option<soroban_sdk::String>,
+    pub frozen_at: u64,
+}
+
+pub fn emit_address_frozen(env: &Env, event: AddressFrozenEvent) {
+    let topics = (symbol_short!("addr_frz"),);
+    env.events().publish(topics, event.clone());
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AddressUnfrozenEvent {
+    pub address: Address,
+    pub unfrozen_by: Address,
+    pub unfrozen_at: u64,
+}
+
+pub fn emit_address_unfrozen(env: &Env, event: AddressUnfrozenEvent) {
+    let topics = (symbol_short!("addr_ufrz"),);
+    env.events().publish(topics, event.clone());
 }

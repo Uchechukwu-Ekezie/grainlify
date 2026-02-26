@@ -34,7 +34,7 @@
 //
 // ============================================================================
 
-use crate::{DataKey, Escrow, EscrowStatus};
+use crate::{AnonymousEscrow, DataKey, Escrow, EscrowStatus};
 use soroban_sdk::{token, Address, Env, Vec};
 
 /// Full result of a multi-token balance invariant check.
@@ -83,6 +83,26 @@ pub(crate) fn check_escrow_sanity(escrow: &Escrow) -> bool {
     true
 }
 
+/// Check per-escrow sanity for AnonymousEscrow (INV-1).
+pub(crate) fn check_anon_escrow_sanity(anon: &AnonymousEscrow) -> bool {
+    if anon.amount <= 0 {
+        return false;
+    }
+    if anon.remaining_amount < 0 {
+        return false;
+    }
+    if anon.remaining_amount > anon.amount {
+        return false;
+    }
+    if anon.status == EscrowStatus::Released && anon.remaining_amount != 0 {
+        return false;
+    }
+    if anon.status == EscrowStatus::Refunded && anon.remaining_amount != 0 {
+        return false;
+    }
+    true
+}
+
 // ---------------------------------------------------------------------------
 // INV-4  Refund Consistency
 // ---------------------------------------------------------------------------
@@ -103,11 +123,25 @@ pub(crate) fn check_refund_consistency(escrow: &Escrow) -> bool {
     total_refunded <= consumed
 }
 
+/// Check refund consistency for AnonymousEscrow (INV-4).
+pub(crate) fn check_anon_refund_consistency(anon: &AnonymousEscrow) -> bool {
+    let mut total_refunded: i128 = 0;
+    for record in anon.refund_history.iter() {
+        if record.amount <= 0 {
+            return false;
+        }
+        total_refunded += record.amount;
+    }
+    let consumed = anon.amount - anon.remaining_amount;
+    total_refunded <= consumed
+}
+
 // ---------------------------------------------------------------------------
 // INV-2  Aggregate-to-Ledger
 // ---------------------------------------------------------------------------
 
-/// Sum the remaining_amount of all active (Locked or PartiallyRefunded) escrows.
+/// Sum the remaining_amount of all active (Locked or PartiallyRefunded) escrows,
+/// including both normal Escrow and AnonymousEscrow.
 pub(crate) fn sum_active_escrow_balances(env: &Env) -> i128 {
     let index: Vec<u64> = env
         .storage()
@@ -122,11 +156,19 @@ pub(crate) fn sum_active_escrow_balances(env: &Env) -> i128 {
             .persistent()
             .get::<DataKey, Escrow>(&DataKey::Escrow(bounty_id))
         {
-            // Only active escrows contribute to the contract balance.
             if escrow.status == EscrowStatus::Locked
                 || escrow.status == EscrowStatus::PartiallyRefunded
             {
                 total += escrow.remaining_amount;
+            }
+        } else if let Some(anon) = env
+            .storage()
+            .persistent()
+            .get::<DataKey, AnonymousEscrow>(&DataKey::EscrowAnon(bounty_id))
+        {
+            if anon.status == EscrowStatus::Locked || anon.status == EscrowStatus::PartiallyRefunded
+            {
+                total += anon.remaining_amount;
             }
         }
     }
@@ -144,7 +186,7 @@ pub(crate) fn get_contract_token_balance(env: &Env) -> i128 {
 // INV-5  Index Completeness
 // ---------------------------------------------------------------------------
 
-/// Count how many bounty_ids in the global index have no corresponding Escrow.
+/// Count how many bounty_ids in the global index have no corresponding Escrow or EscrowAnon.
 pub(crate) fn count_orphaned_index_entries(env: &Env) -> u32 {
     let index: Vec<u64> = env
         .storage()
@@ -154,7 +196,12 @@ pub(crate) fn count_orphaned_index_entries(env: &Env) -> u32 {
 
     let mut orphans: u32 = 0;
     for bounty_id in index.iter() {
-        if !env.storage().persistent().has(&DataKey::Escrow(bounty_id)) {
+        if !env.storage().persistent().has(&DataKey::Escrow(bounty_id))
+            && !env
+                .storage()
+                .persistent()
+                .has(&DataKey::EscrowAnon(bounty_id))
+        {
             orphans += 1;
         }
     }
@@ -181,7 +228,7 @@ pub(crate) fn check_all_invariants(env: &Env) -> InvariantReport {
         .get(&DataKey::EscrowIndex)
         .unwrap_or(Vec::new(env));
 
-    // INV-1 + INV-4: Check each escrow
+    // INV-1 + INV-4: Check each escrow (normal and anonymous)
     for bounty_id in index.iter() {
         if let Some(escrow) = env
             .storage()
@@ -200,6 +247,25 @@ pub(crate) fn check_all_invariants(env: &Env) -> InvariantReport {
                 violations.push_back(soroban_sdk::String::from_str(
                     env,
                     "INV-4: Refund history inconsistency",
+                ));
+            }
+        } else if let Some(anon) = env
+            .storage()
+            .persistent()
+            .get::<DataKey, AnonymousEscrow>(&DataKey::EscrowAnon(bounty_id))
+        {
+            if !check_anon_escrow_sanity(&anon) {
+                per_escrow_failures += 1;
+                violations.push_back(soroban_sdk::String::from_str(
+                    env,
+                    "INV-1: Per-escrow sanity check failed (anon)",
+                ));
+            }
+            if !check_anon_refund_consistency(&anon) {
+                refund_inconsistencies += 1;
+                violations.push_back(soroban_sdk::String::from_str(
+                    env,
+                    "INV-4: Refund history inconsistency (anon)",
                 ));
             }
         }

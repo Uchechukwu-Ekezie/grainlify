@@ -24,7 +24,7 @@ macro_rules! setup {
         let $token_client = token::Client::new(&$env, &token_addr);
         let $token_admin = token::StellarAssetClient::new(&$env, &token_addr);
 
-        $client.init(&$admin, &token_addr);
+        let _ = $client.init(&$admin, &token_addr);
         $token_admin.mint(&$program_admin, &$initial_balance);
     };
 }

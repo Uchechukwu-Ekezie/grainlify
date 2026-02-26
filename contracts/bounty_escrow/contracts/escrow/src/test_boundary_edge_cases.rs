@@ -3,7 +3,8 @@ use soroban_sdk::testutils::{Address as _, Ledger};
 use soroban_sdk::{token, Address, Env};
 
 /// Focused boundary test for escrow edge cases.
-/// Tests min/max amounts, deadlines, fee rates, and other numeric boundaries.
+/// Exercises boundary conditions for amount policy (min/max), deadlines, fee rates,
+/// and escrow count queries to ensure contracts handle edge cases without panics.
 #[test]
 fn test_focused_amount_and_deadline_boundaries() {
     let e = Env::default();

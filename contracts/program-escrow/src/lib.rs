@@ -382,6 +382,82 @@ pub fn emergency_open_circuit(env: Env, admin: Address) {
     error_recovery::open_circuit(&env);
 }
 
+// ========================================================================
+// Threshold Monitoring Management
+// ========================================================================
+
+/// Initialize threshold monitoring with default configuration.
+/// Should be called once during contract setup.
+pub fn init_threshold_monitoring(env: Env) {
+    threshold_monitor::init_threshold_monitor(&env);
+}
+
+/// Configure threshold monitoring parameters. Admin only.
+///
+/// # Arguments
+/// * `admin` - Circuit breaker admin address
+/// * `config` - Threshold configuration
+///
+/// # Panics
+/// * If caller is not the registered circuit breaker admin
+/// * If configuration values are invalid
+pub fn configure_thresholds(
+    env: Env,
+    admin: Address,
+    config: threshold_monitor::ThresholdConfig,
+) {
+    let stored = error_recovery::get_circuit_admin(&env);
+    match stored {
+        Some(ref a) if a == &admin => {
+            admin.require_auth();
+        }
+        _ => panic!("Unauthorized: only circuit breaker admin can configure thresholds"),
+    }
+    
+    threshold_monitor::set_threshold_config(&env, config)
+        .unwrap_or_else(|_| panic!("Invalid threshold configuration"));
+}
+
+/// Get current threshold configuration.
+///
+/// # Returns
+/// * `ThresholdConfig` with all threshold settings
+pub fn get_threshold_config(env: Env) -> threshold_monitor::ThresholdConfig {
+    threshold_monitor::get_threshold_config(&env)
+}
+
+/// Get current threshold monitoring metrics and status.
+///
+/// # Returns
+/// * `WindowMetrics` with current window statistics
+pub fn get_threshold_status(env: Env) -> threshold_monitor::WindowMetrics {
+    threshold_monitor::get_current_metrics(&env)
+}
+
+/// Manually reset threshold metrics. Admin only.
+///
+/// # Arguments
+/// * `admin` - Circuit breaker admin address
+///
+/// # Panics
+/// * If caller is not the registered circuit breaker admin
+pub fn reset_threshold_metrics(env: Env, admin: Address) {
+    let stored = error_recovery::get_circuit_admin(&env);
+    match stored {
+        Some(ref a) if a == &admin => {
+            admin.require_auth();
+        }
+        _ => panic!("Unauthorized: only circuit breaker admin can reset metrics"),
+    }
+    
+    threshold_monitor::reset_metrics(&env, &admin);
+    
+    // If circuit is open due to threshold breach, transition to HalfOpen
+    if error_recovery::get_state(&env) == error_recovery::CircuitState::Open {
+        error_recovery::half_open_circuit(&env);
+    }
+}
+
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, token, vec, Address, Env,
     String, Symbol, Vec,

@@ -3378,3 +3378,6 @@ mod test_deadline_variants;
 mod test_query_filters;
 #[cfg(test)]
 mod test_status_transitions;
+
+#[cfg(test)]
+mod test_batch_failure_mode;

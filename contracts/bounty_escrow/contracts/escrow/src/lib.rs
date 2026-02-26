@@ -331,6 +331,36 @@ mod test_release_schedules {
     }
 }
 
+#[cfg(test)]
+mod test_global_rate_limit {
+    use super::*;
+    use soroban_sdk::Env;
+
+    #[test]
+    #[should_panic]
+    fn global_limit_trips_after_threshold() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        // enable a tiny global window: allow 2 operations per window
+        anti_abuse::set_global_config(
+            &env,
+            anti_abuse::GlobalConfig {
+                window_size: 60,
+                max_operations: 2,
+                enabled: true,
+            },
+        );
+
+        // two checks should be fine
+        anti_abuse::check_global_rate_limit(&env);
+        anti_abuse::check_global_rate_limit(&env);
+
+        // third should panic due to limit
+        anti_abuse::check_global_rate_limit(&env);
+    }
+}
+
 mod anti_abuse {
     use soroban_sdk::{contracttype, symbol_short, Address, Env};
 
@@ -354,6 +384,8 @@ mod anti_abuse {
     #[derive(Clone, Debug, Eq, PartialEq)]
     pub enum AntiAbuseKey {
         Config,
+        GlobalConfig,
+        GlobalState,
         State(Address),
         Whitelist(Address),
         Admin,
@@ -368,6 +400,56 @@ mod anti_abuse {
                 max_operations: 100,
                 cooldown_period: 60, // 1 minute default
             })
+    }
+
+    pub fn get_global_config(env: &Env) -> GlobalConfig {
+        env.storage()
+            .instance()
+            .get(&AntiAbuseKey::GlobalConfig)
+            .unwrap_or(GlobalConfig {
+                window_size: 60,    // default 60s window
+                max_operations: 1000, // default global cap per window
+                enabled: false,       // disabled by default
+            })
+    }
+
+    pub fn set_global_config(env: &Env, cfg: GlobalConfig) {
+        env.storage().instance().set(&AntiAbuseKey::GlobalConfig, &cfg);
+    }
+
+    // Global rate limit: coarse-grained cap applied across all callers.
+    pub fn check_global_rate_limit(env: &Env) {
+        let cfg = get_global_config(env);
+        if !cfg.enabled || cfg.max_operations == 0 {
+            return;
+        }
+
+        let now = env.ledger().timestamp();
+        let key = AntiAbuseKey::GlobalState;
+
+        let mut state: GlobalState = env.storage().persistent().get(&key).unwrap_or(GlobalState {
+            window_start_timestamp: now,
+            operation_count: 0,
+        });
+
+        // Window reset check
+        if now >= state.window_start_timestamp.saturating_add(cfg.window_size) {
+            state.window_start_timestamp = now;
+            state.operation_count = 1;
+        } else {
+            if state.operation_count >= cfg.max_operations {
+                env.events().publish(
+                    (symbol_short!("abuse"), symbol_short!("global_limit")),
+                    (now,),
+                );
+                panic!("Global rate limit exceeded");
+            }
+            state.operation_count = state.operation_count.checked_add(1).unwrap();
+        }
+
+        env.storage().persistent().set(&key, &state);
+        // Keep state around for a reasonable TTL
+        env.storage().persistent().extend_ttl(&key, 17280, 17280);
     }
 
     #[allow(dead_code)]
@@ -1244,6 +1326,9 @@ impl BountyEscrowContract {
         // GUARD: acquire reentrancy lock
         reentrancy_guard::acquire(&env);
 
+        // Global rate limit check
+        anti_abuse::check_global_rate_limit(&env);
+
         let admin: Address = env
             .storage()
             .instance()
@@ -1864,7 +1949,11 @@ impl BountyEscrowContract {
         // GUARD: acquire reentrancy lock
         reentrancy_guard::acquire(&env);
 
-        // Apply rate limiting
+        // Global rate limit check
+        anti_abuse::check_global_rate_limit(&env);
+
+        // Apply global + per-address rate limiting
+        anti_abuse::check_global_rate_limit(&env);
         anti_abuse::check_rate_limit(&env, depositor.clone());
 
         if Self::check_paused(&env, symbol_short!("lock")) {
@@ -1977,6 +2066,8 @@ impl BountyEscrowContract {
     ) -> Result<(), Error> {
         reentrancy_guard::acquire(&env);
 
+        // Apply global + per-address rate limiting
+        anti_abuse::check_global_rate_limit(&env);
         anti_abuse::check_rate_limit(&env, depositor.clone());
 
         if Self::check_paused(&env, symbol_short!("lock")) {
@@ -3169,6 +3260,9 @@ impl BountyEscrowContract {
             return Err(Error::AnonymousRefundRequiresResolution);
         }
 
+        // Global rate check (coarse-grained protection)
+        anti_abuse::check_global_rate_limit(&env);
+
         // GUARD: acquire reentrancy lock
         reentrancy_guard::acquire(&env);
 
@@ -3305,6 +3399,9 @@ impl BountyEscrowContract {
             return Err(Error::NotAnonymousEscrow);
         }
 
+        // Global rate check (coarse-grained protection)
+        anti_abuse::check_global_rate_limit(&env);
+
         reentrancy_guard::acquire(&env);
 
         let mut anon: AnonymousEscrow = env
@@ -3424,6 +3521,9 @@ impl BountyEscrowContract {
                 return Err(Error::ClaimPending);
             }
         }
+
+        // Global rate check (coarse-grained protection)
+        anti_abuse::check_global_rate_limit(&env);
 
         Self::consume_capability(
             &env,

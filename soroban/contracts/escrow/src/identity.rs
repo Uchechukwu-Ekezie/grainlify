@@ -2,8 +2,8 @@
 //! Identity-aware limits module for escrow contract
 //! Handles off-chain identity claims, signature verification, and tier-based limits
 
-use soroban_sdk::{contracttype, Address, BytesN, Env, Bytes};
 use soroban_sdk::xdr::ToXdr;
+use soroban_sdk::{contracttype, Address, Bytes, BytesN, Env};
 
 use crate::Error;
 
@@ -24,9 +24,9 @@ pub enum IdentityTier {
 pub struct IdentityClaim {
     pub address: Address,
     pub tier: IdentityTier,
-    pub risk_score: u32,  // 0-100
-    pub expiry: u64,      // Unix timestamp
-    pub issuer: Address,  // Issuer public key
+    pub risk_score: u32, // 0-100
+    pub expiry: u64,     // Unix timestamp
+    pub issuer: Address, // Issuer public key
 }
 
 /// Stored identity data for an address
@@ -71,10 +71,10 @@ impl Default for AddressIdentity {
 impl Default for TierLimits {
     fn default() -> Self {
         Self {
-            unverified_limit: 100_0000000,      // 100 tokens (7 decimals)
-            basic_limit: 1000_0000000,          // 1,000 tokens
-            verified_limit: 10000_0000000,      // 10,000 tokens
-            premium_limit: 100000_0000000,      // 100,000 tokens
+            unverified_limit: 100_0000000, // 100 tokens (7 decimals)
+            basic_limit: 1000_0000000,     // 1,000 tokens
+            verified_limit: 10000_0000000, // 10,000 tokens
+            premium_limit: 100000_0000000, // 100,000 tokens
         }
     }
 }
@@ -83,7 +83,7 @@ impl Default for RiskThresholds {
     fn default() -> Self {
         Self {
             high_risk_threshold: 70,
-            high_risk_multiplier: 50,  // 50% of tier limit
+            high_risk_multiplier: 50, // 50% of tier limit
         }
     }
 }
@@ -94,17 +94,22 @@ pub fn serialize_claim(env: &Env, claim: &IdentityClaim) -> Bytes {
     // Serialize claim to bytes using Soroban's serialization
     // This creates a deterministic byte representation
     let mut bytes = Bytes::new(env);
-    
+
     // Serialize each field in order
     bytes.append(&claim.address.clone().to_xdr(env));
-    bytes.append(&Bytes::from_array(env, &[(claim.tier.clone() as u32).to_be_bytes()[0], 
-                                             (claim.tier.clone() as u32).to_be_bytes()[1],
-                                             (claim.tier.clone() as u32).to_be_bytes()[2],
-                                             (claim.tier.clone() as u32).to_be_bytes()[3]]));
+    bytes.append(&Bytes::from_array(
+        env,
+        &[
+            (claim.tier.clone() as u32).to_be_bytes()[0],
+            (claim.tier.clone() as u32).to_be_bytes()[1],
+            (claim.tier.clone() as u32).to_be_bytes()[2],
+            (claim.tier.clone() as u32).to_be_bytes()[3],
+        ],
+    ));
     bytes.append(&Bytes::from_array(env, &claim.risk_score.to_be_bytes()));
     bytes.append(&Bytes::from_array(env, &claim.expiry.to_be_bytes()));
     bytes.append(&claim.issuer.clone().to_xdr(env));
-    
+
     bytes
 }
 
@@ -118,11 +123,11 @@ pub fn verify_claim_signature(
 ) -> Result<(), Error> {
     // Serialize the claim data
     let message = serialize_claim(env, claim);
-    
+
     // Verify the signature using Ed25519
     env.crypto()
         .ed25519_verify(issuer_pubkey, &message, signature);
-    
+
     Ok(())
 }
 
@@ -138,7 +143,7 @@ pub fn validate_claim(claim: &IdentityClaim) -> Result<(), Error> {
     if claim.risk_score > 100 {
         return Err(Error::InvalidRiskScore);
     }
-    
+
     Ok(())
 }
 
@@ -156,7 +161,7 @@ pub fn calculate_effective_limit(
         IdentityTier::Verified => tier_limits.verified_limit,
         IdentityTier::Premium => tier_limits.premium_limit,
     };
-    
+
     // Apply risk-based adjustment if risk score is high
     if identity.risk_score >= risk_thresholds.high_risk_threshold {
         // Reduce limit by risk multiplier percentage

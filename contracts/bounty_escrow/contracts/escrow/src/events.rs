@@ -1,5 +1,5 @@
 use crate::{CapabilityAction, DisputeOutcome, DisputeReason};
-use soroban_sdk::{contracttype, symbol_short, Address, Env};
+use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env};
 
 pub const EVENT_VERSION_V2: u32 = 2;
 
@@ -29,6 +29,22 @@ pub struct FundsLocked {
 
 pub fn emit_funds_locked(env: &Env, event: FundsLocked) {
     let topics = (symbol_short!("f_lock"), event.bounty_id);
+    env.events().publish(topics, event.clone());
+}
+
+/// Event for anonymous lock: only depositor commitment is emitted (no plaintext address).
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct FundsLockedAnon {
+    pub version: u32,
+    pub bounty_id: u64,
+    pub amount: i128,
+    pub depositor_commitment: BytesN<32>,
+    pub deadline: u64,
+}
+
+pub fn emit_funds_locked_anon(env: &Env, event: FundsLockedAnon) {
+    let topics = (symbol_short!("lock_anon"), event.bounty_id);
     env.events().publish(topics, event.clone());
 }
 

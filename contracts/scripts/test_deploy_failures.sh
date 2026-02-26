@@ -33,6 +33,27 @@ disable_identity_mock() {
     export PATH="$ORIGINAL_PATH"
 }
 
+enable_invalid_identity_with_network_mock() {
+    cat > "$MOCK_BIN/stellar" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$1" = "keys" && "$2" = "address" ]]; then
+    echo "Identity not found" >&2
+    exit 1
+fi
+echo "Mock stellar call"
+exit 0
+EOF
+
+    cat > "$MOCK_BIN/curl" <<'EOF'
+#!/usr/bin/env bash
+# Keep connectivity checks deterministic in offline CI/sandbox runs.
+exit 0
+EOF
+
+    chmod +x "$MOCK_BIN/stellar" "$MOCK_BIN/curl"
+    export PATH="$MOCK_BIN:$ORIGINAL_PATH"
+}
+
 ORIGINAL_PATH="$PATH"
 
 # --------------------- TEST RUNNER --------------------------
@@ -76,7 +97,7 @@ run_expect_fail "Invalid WASM file path" "WASM file not found" "/tmp/this_file_d
 # ------------------------------------------------------------
 # 3. Invalid identity should FAIL identity check (NO mocking)
 # ------------------------------------------------------------
-disable_identity_mock
+enable_invalid_identity_with_network_mock
 run_expect_fail "Invalid identity" "Identity not found" "$FAKE_WASM" --identity "ghost_id"
 
 # ------------------------------------------------------------

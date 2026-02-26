@@ -3,7 +3,7 @@
 
 use super::*;
 use soroban_sdk::testutils::{Address as _, Ledger};
-use soroban_sdk::{token, Address, Env, BytesN};
+use soroban_sdk::{token, Address, BytesN, Env};
 
 fn setup_with_identity<'a>(
     env: &'a Env,
@@ -25,7 +25,7 @@ fn setup_with_identity<'a>(
     let depositor = Address::generate(env);
     let contributor = Address::generate(env);
     let issuer = Address::generate(env);
-    
+
     let (token_addr, token_client, token_admin) = create_token(env, &admin);
 
     client.init(&admin, &token_addr);
@@ -78,9 +78,9 @@ fn test_set_tier_limits() {
 
     // Set custom tier limits
     client.set_tier_limits(
-        &100_0000000,   // unverified: 100 tokens
-        &1000_0000000,  // basic: 1,000 tokens
-        &10000_0000000, // verified: 10,000 tokens
+        &100_0000000,    // unverified: 100 tokens
+        &1000_0000000,   // basic: 1,000 tokens
+        &10000_0000000,  // verified: 10,000 tokens
         &100000_0000000, // premium: 100,000 tokens
     );
 

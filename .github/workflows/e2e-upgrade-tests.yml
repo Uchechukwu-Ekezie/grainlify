@@ -122,7 +122,7 @@ jobs:
         working-directory: contracts/bounty_escrow/contracts/escrow
         run: |
           cargo build --target wasm32-unknown-unknown --release
-          soroban contract optimize --wasm target/wasm32-unknown-unknown/release/bounty_escrow.wasm
+          soroban contract optimize --wasm ../../target/wasm32-unknown-unknown/release/bounty_escrow.wasm
 
       - name: Run E2E Upgrade with Pause Tests
         working-directory: contracts/bounty_escrow/contracts/escrow
@@ -220,10 +220,10 @@ jobs:
       - name: Run Integration Tests
         working-directory: contracts
         run: |
-          if [ -f "integration_tests.rs" ]; then
+          if [ -f "integration_tests.rs" ] && [ -f "Cargo.toml" ]; then
             cargo test --test integration_tests -- --nocapture
           else
-            echo "No integration tests found, skipping"
+            echo "No runnable integration Cargo target found, skipping"
           fi
 
   test-summary:

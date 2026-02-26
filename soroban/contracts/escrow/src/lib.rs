@@ -2,7 +2,10 @@
 //! Minimal Soroban escrow demo: lock, release, and refund.
 //! Parity with main contracts/bounty_escrow where applicable; see soroban/PARITY.md.
 
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, token, Address, Env, BytesN};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env,
+    String, Symbol,
+};
 
 mod identity;
 pub use identity::*;
@@ -29,6 +32,9 @@ pub enum Error {
     TransactionExceedsLimit = 104,
     InvalidRiskScore = 105,
     InvalidTier = 106,
+    JurisdictionPaused = 107,
+    JurisdictionKycRequired = 108,
+    JurisdictionAmountExceeded = 109,
 }
 
 #[contracttype]
@@ -41,12 +47,41 @@ pub enum EscrowStatus {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EscrowJurisdictionConfig {
+    pub tag: Option<String>,
+    pub requires_kyc: bool,
+    pub enforce_identity_limits: bool,
+    pub lock_paused: bool,
+    pub release_paused: bool,
+    pub refund_paused: bool,
+    pub max_lock_amount: Option<i128>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Escrow {
     pub depositor: Address,
     pub amount: i128,
     pub remaining_amount: i128,
     pub status: EscrowStatus,
     pub deadline: u64,
+    pub jurisdiction: Option<EscrowJurisdictionConfig>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EscrowJurisdictionEvent {
+    pub version: u32,
+    pub bounty_id: u64,
+    pub operation: Symbol,
+    pub jurisdiction_tag: Option<String>,
+    pub requires_kyc: bool,
+    pub enforce_identity_limits: bool,
+    pub lock_paused: bool,
+    pub release_paused: bool,
+    pub refund_paused: bool,
+    pub max_lock_amount: Option<i128>,
+    pub timestamp: u64,
 }
 
 #[contracttype]
@@ -67,6 +102,117 @@ pub struct EscrowContract;
 
 #[contractimpl]
 impl EscrowContract {
+    fn emit_jurisdiction_event(
+        env: &Env,
+        bounty_id: u64,
+        operation: Symbol,
+        jurisdiction: &Option<EscrowJurisdictionConfig>,
+    ) {
+        let (
+            jurisdiction_tag,
+            requires_kyc,
+            enforce_identity_limits,
+            lock_paused,
+            release_paused,
+            refund_paused,
+            max_lock_amount,
+        ) = if let Some(cfg) = jurisdiction {
+            (
+                cfg.tag.clone(),
+                cfg.requires_kyc,
+                cfg.enforce_identity_limits,
+                cfg.lock_paused,
+                cfg.release_paused,
+                cfg.refund_paused,
+                cfg.max_lock_amount,
+            )
+        } else {
+            (None, false, true, false, false, false, None)
+        };
+
+        env.events().publish(
+            (symbol_short!("juris"), operation.clone(), bounty_id),
+            EscrowJurisdictionEvent {
+                version: 2,
+                bounty_id,
+                operation,
+                jurisdiction_tag,
+                requires_kyc,
+                enforce_identity_limits,
+                lock_paused,
+                release_paused,
+                refund_paused,
+                max_lock_amount,
+                timestamp: env.ledger().timestamp(),
+            },
+        );
+    }
+
+    fn enforce_lock_jurisdiction(
+        env: &Env,
+        depositor: &Address,
+        amount: i128,
+        jurisdiction: &Option<EscrowJurisdictionConfig>,
+    ) -> Result<(), Error> {
+        if let Some(cfg) = jurisdiction {
+            if cfg.lock_paused {
+                return Err(Error::JurisdictionPaused);
+            }
+            if cfg.requires_kyc && !Self::is_claim_valid(env.clone(), depositor.clone()) {
+                return Err(Error::JurisdictionKycRequired);
+            }
+            if let Some(max_lock_amount) = cfg.max_lock_amount {
+                if amount > max_lock_amount {
+                    return Err(Error::JurisdictionAmountExceeded);
+                }
+            }
+            if cfg.enforce_identity_limits {
+                return Self::enforce_transaction_limit(env, depositor, amount);
+            }
+            return Ok(());
+        }
+
+        Self::enforce_transaction_limit(env, depositor, amount)
+    }
+
+    fn enforce_release_jurisdiction(
+        env: &Env,
+        contributor: &Address,
+        amount: i128,
+        jurisdiction: &Option<EscrowJurisdictionConfig>,
+    ) -> Result<(), Error> {
+        if let Some(cfg) = jurisdiction {
+            if cfg.release_paused {
+                return Err(Error::JurisdictionPaused);
+            }
+            if cfg.requires_kyc && !Self::is_claim_valid(env.clone(), contributor.clone()) {
+                return Err(Error::JurisdictionKycRequired);
+            }
+            if cfg.enforce_identity_limits {
+                return Self::enforce_transaction_limit(env, contributor, amount);
+            }
+            return Ok(());
+        }
+
+        Self::enforce_transaction_limit(env, contributor, amount)
+    }
+
+    fn enforce_refund_jurisdiction(
+        env: &Env,
+        depositor: &Address,
+        jurisdiction: &Option<EscrowJurisdictionConfig>,
+    ) -> Result<(), Error> {
+        if let Some(cfg) = jurisdiction {
+            if cfg.refund_paused {
+                return Err(Error::JurisdictionPaused);
+            }
+            if cfg.requires_kyc && !Self::is_claim_valid(env.clone(), depositor.clone()) {
+                return Err(Error::JurisdictionKycRequired);
+            }
+        }
+        Ok(())
+    }
+
     /// Initialize with admin and token. Call once.
     pub fn init(env: Env, admin: Address, token: Address) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Admin) {
@@ -74,22 +220,22 @@ impl EscrowContract {
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Token, &token);
-        
+
         // Initialize default tier limits and risk thresholds
         let default_limits = TierLimits::default();
         let default_thresholds = RiskThresholds::default();
-        env.storage().persistent().set(&DataKey::TierLimits, &default_limits);
-        env.storage().persistent().set(&DataKey::RiskThresholds, &default_thresholds);
-        
+        env.storage()
+            .persistent()
+            .set(&DataKey::TierLimits, &default_limits);
+        env.storage()
+            .persistent()
+            .set(&DataKey::RiskThresholds, &default_thresholds);
+
         Ok(())
     }
 
     /// Set or update an authorized claim issuer (admin only)
-    pub fn set_authorized_issuer(
-        env: Env,
-        issuer: Address,
-        authorized: bool,
-    ) -> Result<(), Error> {
+    pub fn set_authorized_issuer(env: Env, issuer: Address, authorized: bool) -> Result<(), Error> {
         let admin: Address = env
             .storage()
             .instance()
@@ -104,7 +250,11 @@ impl EscrowContract {
         // Emit event for issuer management
         env.events().publish(
             (soroban_sdk::symbol_short!("issuer"), issuer.clone()),
-            if authorized { soroban_sdk::symbol_short!("add") } else { soroban_sdk::symbol_short!("remove") },
+            if authorized {
+                soroban_sdk::symbol_short!("add")
+            } else {
+                soroban_sdk::symbol_short!("remove")
+            },
         );
 
         Ok(())
@@ -132,7 +282,9 @@ impl EscrowContract {
             premium_limit: premium,
         };
 
-        env.storage().persistent().set(&DataKey::TierLimits, &limits);
+        env.storage()
+            .persistent()
+            .set(&DataKey::TierLimits, &limits);
         Ok(())
     }
 
@@ -214,9 +366,10 @@ impl EscrowContract {
             last_updated: now,
         };
 
-        env.storage()
-            .persistent()
-            .set(&DataKey::AddressIdentity(claim.address.clone()), &identity_data);
+        env.storage().persistent().set(
+            &DataKey::AddressIdentity(claim.address.clone()),
+            &identity_data,
+        );
 
         // Emit event for successful claim submission
         env.events().publish(
@@ -251,7 +404,7 @@ impl EscrowContract {
     /// Query effective transaction limit for an address
     pub fn get_effective_limit(env: Env, address: Address) -> i128 {
         let identity = Self::get_address_identity(env.clone(), address);
-        
+
         let tier_limits: TierLimits = env
             .storage()
             .persistent()
@@ -288,7 +441,11 @@ impl EscrowContract {
             // Emit event for limit enforcement failure
             env.events().publish(
                 (soroban_sdk::symbol_short!("limit"), address.clone()),
-                (soroban_sdk::symbol_short!("exceed"), amount, effective_limit),
+                (
+                    soroban_sdk::symbol_short!("exceed"),
+                    amount,
+                    effective_limit,
+                ),
             );
             return Err(Error::TransactionExceedsLimit);
         }
@@ -314,6 +471,18 @@ impl EscrowContract {
         amount: i128,
         deadline: u64,
     ) -> Result<(), Error> {
+        Self::lock_funds_with_jurisdiction(env, depositor, bounty_id, amount, deadline, None)
+    }
+
+    /// Lock funds with optional jurisdiction controls.
+    pub fn lock_funds_with_jurisdiction(
+        env: Env,
+        depositor: Address,
+        bounty_id: u64,
+        amount: i128,
+        deadline: u64,
+        jurisdiction: Option<EscrowJurisdictionConfig>,
+    ) -> Result<(), Error> {
         // GUARD: acquire reentrancy lock
         reentrancy_guard::acquire(&env);
 
@@ -328,9 +497,8 @@ impl EscrowContract {
             return Err(Error::BountyExists);
         }
 
-        // Enforce transaction limit based on identity tier
-        Self::enforce_transaction_limit(&env, &depositor, amount)?;
-        
+        Self::enforce_lock_jurisdiction(&env, &depositor, amount, &jurisdiction)?;
+
         // EFFECTS: write escrow state before external call
         let escrow = Escrow {
             depositor: depositor.clone(),
@@ -338,6 +506,7 @@ impl EscrowContract {
             remaining_amount: amount,
             status: EscrowStatus::Locked,
             deadline,
+            jurisdiction: jurisdiction.clone(),
         };
         env.storage()
             .persistent()
@@ -352,6 +521,8 @@ impl EscrowContract {
         let contract = env.current_contract_address();
         let token_client = token::Client::new(&env, &token);
         token_client.transfer(&depositor, &contract, &amount);
+
+        Self::emit_jurisdiction_event(&env, bounty_id, symbol_short!("lock"), &jurisdiction);
 
         // GUARD: release reentrancy lock
         reentrancy_guard::release(&env);
@@ -385,9 +556,13 @@ impl EscrowContract {
             return Err(Error::InsufficientBalance);
         }
 
-        // Enforce transaction limit for contributor
-        Self::enforce_transaction_limit(&env, &contributor, escrow.remaining_amount)?;
-        
+        Self::enforce_release_jurisdiction(
+            &env,
+            &contributor,
+            escrow.remaining_amount,
+            &escrow.jurisdiction,
+        )?;
+
         // EFFECTS: update state before external call (CEI)
         let release_amount = escrow.remaining_amount;
         escrow.remaining_amount = 0;
@@ -405,6 +580,13 @@ impl EscrowContract {
         let contract = env.current_contract_address();
         let token_client = token::Client::new(&env, &token);
         token_client.transfer(&contract, &contributor, &release_amount);
+
+        Self::emit_jurisdiction_event(
+            &env,
+            bounty_id,
+            symbol_short!("release"),
+            &escrow.jurisdiction,
+        );
 
         // GUARD: release reentrancy lock
         reentrancy_guard::release(&env);
@@ -439,6 +621,7 @@ impl EscrowContract {
         if escrow.remaining_amount <= 0 {
             return Err(Error::InsufficientBalance);
         }
+        Self::enforce_refund_jurisdiction(&env, &escrow.depositor, &escrow.jurisdiction)?;
 
         // EFFECTS: update state before external call (CEI)
         let amount = escrow.remaining_amount;
@@ -459,6 +642,13 @@ impl EscrowContract {
         let token_client = token::Client::new(&env, &token);
         token_client.transfer(&contract, &depositor, &amount);
 
+        Self::emit_jurisdiction_event(
+            &env,
+            bounty_id,
+            symbol_short!("refund"),
+            &escrow.jurisdiction,
+        );
+
         // GUARD: release reentrancy lock
         reentrancy_guard::release(&env);
         Ok(())
@@ -471,7 +661,16 @@ impl EscrowContract {
             .get(&DataKey::Escrow(bounty_id))
             .ok_or(Error::BountyNotFound)
     }
+
+    /// Read jurisdiction configuration for an escrow.
+    pub fn get_escrow_jurisdiction(
+        env: Env,
+        bounty_id: u64,
+    ) -> Result<Option<EscrowJurisdictionConfig>, Error> {
+        let escrow = Self::get_escrow(env, bounty_id)?;
+        Ok(escrow.jurisdiction)
+    }
 }
 
-mod test;
 mod identity_test;
+mod test;

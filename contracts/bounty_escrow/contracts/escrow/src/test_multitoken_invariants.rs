@@ -429,6 +429,46 @@ fn test_verify_all_invariants_not_initialized_returns_false() {
 
     // Contract not initialized yet
     assert!(!client.verify_all_invariants());
+    let report = client.check_invariants();
+    assert!(!report.healthy);
+    assert!(!report.initialized);
+    assert_eq!(report.violation_count, 1);
+}
+
+#[test]
+fn test_check_invariants_reports_healthy_state() {
+    let s = InvSetup::new();
+    let deadline = s.env.ledger().timestamp() + 5_000;
+
+    s.escrow.lock_funds(&s.depositor, &1_u64, &1_500, &deadline);
+
+    let report = s.escrow.check_invariants();
+    assert!(report.healthy);
+    assert!(report.initialized);
+    assert!(report.config_sane);
+    assert_eq!(report.sum_remaining, 1_500);
+    assert_eq!(report.token_balance, 1_500);
+    assert_eq!(report.violation_count, 0);
+}
+
+#[test]
+fn test_check_invariants_detects_config_sanity_violation() {
+    let s = InvSetup::new();
+
+    let mut fee_cfg = s.escrow.get_fee_config();
+    fee_cfg.lock_fee_rate = -1;
+
+    s.env.as_contract(&s.escrow.address, || {
+        s.env
+            .storage()
+            .instance()
+            .set(&DataKey::FeeConfig, &fee_cfg);
+    });
+
+    let report = s.escrow.check_invariants();
+    assert!(!report.config_sane);
+    assert!(!report.healthy);
+    assert!(!s.escrow.verify_all_invariants());
 }
 
 #[test]
@@ -459,6 +499,11 @@ fn test_tampered_balance_detected_by_invariant() {
         // INV-2 should fail (sum != balance)
         assert_ne!(report.sum_remaining, report.token_balance);
     });
+
+    let public_report = s.escrow.check_invariants();
+    assert!(!public_report.healthy);
+    assert!(public_report.per_escrow_failures > 0);
+    assert_ne!(public_report.sum_remaining, public_report.token_balance);
 }
 
 // ===========================================================================

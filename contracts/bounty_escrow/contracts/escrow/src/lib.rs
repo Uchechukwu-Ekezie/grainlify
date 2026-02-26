@@ -21,21 +21,17 @@ mod test_rbac;
 mod traits;
 
 use events::{
-    emit_address_frozen, emit_address_unfrozen, emit_batch_funds_locked, emit_batch_funds_locked,
-    emit_batch_funds_released, emit_batch_funds_released, emit_bounty_initialized,
-    emit_bounty_initialized, emit_escrow_archived, emit_escrow_cloned, emit_escrow_frozen,
-    emit_escrow_locked, emit_escrow_renewed, emit_escrow_unfrozen, emit_escrow_unlocked,
-    emit_event_batch, emit_funds_locked, emit_funds_locked, emit_funds_locked_anon,
-    emit_funds_refunded, emit_funds_refunded, emit_funds_released, emit_funds_released,
-    emit_new_cycle_created, emit_ticket_claimed, emit_ticket_claimed, emit_ticket_issued,
+    emit_address_frozen, emit_address_unfrozen, emit_batch_funds_locked,
+    emit_batch_funds_released, emit_bounty_initialized, emit_escrow_archived, emit_escrow_cloned,
+    emit_escrow_frozen, emit_escrow_locked, emit_escrow_renewed, emit_escrow_unfrozen,
+    emit_escrow_unlocked, emit_event_batch, emit_funds_locked, emit_funds_locked_anon,
+    emit_funds_refunded, emit_funds_released, emit_new_cycle_created, emit_ticket_claimed,
     emit_ticket_issued, ActionSummary, AddressFrozenEvent, AddressUnfrozenEvent, BatchFundsLocked,
-    BatchFundsLocked, BatchFundsReleased, BatchFundsReleased, BountyEscrowInitialized,
-    BountyEscrowInitialized, ClaimCancelled, ClaimCancelled, ClaimCreated, ClaimCreated,
-    ClaimExecuted, ClaimExecuted, EscrowArchivedEvent, EscrowClonedEvent, EscrowFrozenEvent,
-    EscrowLockedEvent, EscrowRenewedEvent, EscrowUnfrozenEvent, EscrowUnlockedEvent, EventBatch,
-    FundsLocked, FundsLocked, FundsLockedAnon, FundsRefunded, FundsRefunded, FundsReleased,
-    FundsReleased, NewCycleCreatedEvent, TicketClaimed, TicketClaimed, TicketIssued, TicketIssued,
-    EVENT_VERSION_V2, EVENT_VERSION_V2,
+    BatchFundsReleased, BountyEscrowInitialized, ClaimCancelled, ClaimCreated, ClaimExecuted,
+    EscrowArchivedEvent, EscrowClonedEvent, EscrowFrozenEvent, EscrowLockedEvent,
+    EscrowRenewedEvent, EscrowUnfrozenEvent, EscrowUnlockedEvent, EventBatch, FundsLocked,
+    FundsLockedAnon, FundsRefunded, FundsReleased, NewCycleCreatedEvent, TicketClaimed,
+    TicketIssued, EVENT_VERSION_V2,
 };
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, token, vec, Address, BytesN,
@@ -447,13 +443,13 @@ pub enum Error {
     /// Returned when address is frozen by admin (Issue #578)
     AddressFrozen = 40,
     /// Refund for anonymous escrow must go through refund_resolved (resolver provides recipient)
-    AnonymousRefundRequiresResolution = 34,
+    AnonymousRefundRequiresResolution = 41,
     /// Anonymous resolver address not set in instance storage
-    AnonymousResolverNotSet = 35,
-    /// Bounty exists but is not an anonymous escrow (for refund_resolved)
-    NotAnonymousEscrow = 36,
+    AnonymousResolverNotSet = 42,
+    /// Bounty exists but is not an anonymous escrow
+    NotAnonymousEscrow = 43,
     /// Use get_escrow_info_v2 for anonymous escrows
-    UseGetEscrowInfoV2ForAnonymous = 37,
+    UseGetEscrowInfoV2ForAnonymous = 44,
 }
 
 #[contracttype]
@@ -471,6 +467,7 @@ pub enum EscrowStatus {
     Released,
     Refunded,
     PartiallyRefunded,
+    Template,
 }
 
 #[contracttype]
@@ -564,6 +561,14 @@ pub enum DataKey {
     FreezeEscrow(u64),
     /// Per-address freeze (Issue #578): Address -> AddressFreezeRecord
     FreezeAddress(Address),
+    /// Per-escrow owner lock (Issue #675): bounty_id -> EscrowLockState
+    EscrowLock(u64),
+    /// Completion timestamp for terminal-state escrows (Issue #684): bounty_id -> u64
+    CompletedAt(u64),
+    /// Archived flag (Issue #684): bounty_id -> bool
+    Archived(u64),
+    /// Auto-archive config (Issue #684)
+    AutoArchiveConfig,
 }
 
 #[contracttype]
@@ -805,6 +810,24 @@ pub struct AddressFreezeRecord {
     pub frozen_by: Address,
     pub frozen_at: u64,
     pub reason: Option<soroban_sdk::String>,
+}
+
+/// Per-escrow owner lock state (Issue #675).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EscrowLockState {
+    pub locked: bool,
+    pub locked_until: Option<u64>,
+    pub locked_reason: Option<soroban_sdk::String>,
+    pub locked_by: Address,
+}
+
+/// Auto-archive configuration (Issue #684).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AutoArchiveConfig {
+    pub enabled: bool,
+    pub cooldown_seconds: u64,
 }
 
 #[contract]
